@@ -23,7 +23,7 @@ const MyTickets = () => {
   useEffect(() => {
     const loadMyTickets = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/tasks/my-tasks/${user.employeeId}`, {
+        const res = await axios.get(`https://emsbackend-2w9c.onrender.com/api/tasks/my-tasks/${user.employeeId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setTickets(res.data);
@@ -59,7 +59,7 @@ const MyTickets = () => {
 
   const updateTicketStatus = async (ticketId, newStatus) => {
     try {
-      await axios.patch(`http://localhost:5000/api/tasks/${ticketId}`, 
+      await axios.patch(`https://emsbackend-2w9c.onrender.com/api/tasks/${ticketId}`, 
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );

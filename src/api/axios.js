@@ -1,54 +1,32 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: "https://emsbackend-2w9c.onrender.com/api",
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
 });
 
-// Attach auth token automatically (from localStorage)
+// Request interceptor
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
-    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
+// Response interceptor
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default API;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import axios from 'axios';
-
-// const API = axios.create({
-//   baseURL: 'http://localhost:5000/api/auth',
-// });
-
-// // Login
-// export const loginUser = async (data) => {
-//   const response = await API.post('/login', data);
-//   return response.data;
-// };
-
-// // Add user
-// export const addUser = async (data) => {
-//   const response = await API.post('/add-user', data);
-//   return response.data;
-// };

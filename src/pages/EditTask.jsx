@@ -1,24 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
-import { FiDownload, FiTrash2, FiFile } from "react-icons/fi";
+import { 
+  FiArrowLeft, FiBriefcase, FiCalendar, FiUser, FiLayers, FiUsers, 
+  FiCheckCircle, FiClock, FiAlertCircle, FiTag, FiFileText, 
+  FiUpload, FiTrash2, FiSave, FiChevronDown 
+} from "react-icons/fi";
 
 const EditTask = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [ticket, setTicket] = useState({
     title: "",
     description: "",
-    assignedTo: "",
+    assignedTo: [],
     team: "",
     startDate: "",
     dueDate: "",
     estimatedHours: "",
     priority: "Medium",
-    status: "Not Started",
     category: "Development",
     progress: 0,
     tags: "",
@@ -29,47 +31,142 @@ const EditTask = () => {
   const [employees, setEmployees] = useState([]);
   const [teams, setTeams] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchingError, setFetchingError] = useState("");
+  const [attachments, setAttachments] = useState([]);
   const [existingAttachments, setExistingAttachments] = useState([]);
-  const [newAttachments, setNewAttachments] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   
-  const token = localStorage.getItem("token");
+  const [currentUser, setCurrentUser] = useState({ id: "", name: "", employeeId: "" });
+  const [userLoading, setUserLoading] = useState(true);
+  const [taskCreator, setTaskCreator] = useState({ id: "", name: "", employeeId: "" });
+  const [creatorLoading, setCreatorLoading] = useState(true);
   
-  // Create axios instance with auth header
+  const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+
   const api = axios.create({
-    baseURL: "http://localhost:5000/api",
+    baseURL: "https://emsbackend-2w9c.onrender.com/api",
   });
 
   api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   });
   
-  // Fetch ticket data and employees/teams
+  const decodeJWT = (token) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const fetchUserById = async (userId) => {
+    try {
+      const response = await api.get(`/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      return null;
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsAssigneeDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+  
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      if (!token) {
+        setCurrentUser({ id: "no-token", name: "Guest", employeeId: "N/A" });
+        setUserLoading(false);
+        return;
+      }
       try {
-        // Fetch ticket data by ID
-        const ticketRes = await api.get(`/tasks/${id}`);
-        const ticketData = ticketRes.data;
+        const decoded = decodeJWT(token);
+        if (!decoded || !decoded.id) throw new Error("Invalid token");
+        const userId = decoded.id || decoded._id;
+        const userData = await fetchUserById(userId);
+        if (userData) {
+          setCurrentUser({
+            id: userData._id,
+            name: userData.name,
+            employeeId: userData.employeeId,
+          });
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setUserLoading(false);
+      }
+    };
+    getCurrentUser();
+  }, [token]);
+  
+  useEffect(() => {
+    const getInitialData = async () => {
+      try {
+        const taskResponse = await api.get(`/tasks/${id}`);
+        const taskData = taskResponse.data;
         
-        // Format dates for form inputs (YYYY-MM-DD format)
-        const formattedTicket = {
-          ...ticketData,
-          startDate: ticketData.startDate ? new Date(ticketData.startDate).toISOString().split('T')[0] : "",
-          dueDate: ticketData.dueDate ? new Date(ticketData.dueDate).toISOString().split('T')[0] : "",
-          assignedTo: ticketData.assignedTo?._id || "",
-          team: ticketData.team?._id || ""
-        };
+        let assignedToValue = [];
+        if (taskData.assignedTo) {
+          if (Array.isArray(taskData.assignedTo)) {
+            assignedToValue = taskData.assignedTo.map(assignee => 
+              typeof assignee === 'object' ? assignee._id : assignee
+            );
+          } else if (typeof taskData.assignedTo === 'object') {
+            assignedToValue = [taskData.assignedTo._id];
+          } else {
+            assignedToValue = [taskData.assignedTo];
+          }
+        }
         
-        setTicket(formattedTicket);
-        setExistingAttachments(ticketData.attachments || []);
-        setFetchingError("");
+        setTicket({
+          title: taskData.title || "",
+          description: taskData.description || "",
+          assignedTo: assignedToValue,
+          team: taskData.team?._id || "",
+          startDate: taskData.startDate ? new Date(taskData.startDate).toISOString().split('T')[0] : "",
+          dueDate: taskData.dueDate ? new Date(taskData.dueDate).toISOString().split('T')[0] : "",
+          estimatedHours: taskData.estimatedHours || "",
+          priority: taskData.priority || "Medium",
+          category: taskData.category || "Development",
+          progress: taskData.progress || 0,
+          tags: taskData.tags || "",
+          notes: taskData.notes || "",
+          notifyAssignee: taskData.notifyAssignee !== undefined ? taskData.notifyAssignee : true
+        });
         
-        // Fetch employees and teams
+        setExistingAttachments(taskData.attachments || []);
+        
+        if (taskData.createdBy) {
+          const creatorData = await fetchUserById(taskData.createdBy._id || taskData.createdBy);
+          if (creatorData) {
+            setTaskCreator({
+              id: creatorData._id,
+              name: creatorData.name,
+              employeeId: creatorData.employeeId
+            });
+          }
+        }
+        
         const [employeesRes, teamsRes] = await Promise.all([
           api.get("/users"),
           api.get("/teams")
@@ -77,23 +174,17 @@ const EditTask = () => {
         
         setEmployees(employeesRes.data || []);
         setTeams(teamsRes.data || []);
-        setFilteredEmployees(employeesRes.data || []);
-        
-        setLoading(false);
       } catch (err) {
-        console.error("Error fetching data:", err);
-        setFetchingError("Failed to load ticket data");
-        setToast({ show: true, message: 'Failed to load ticket data', type: 'error' });
+        console.error(err);
+        setToast({ show: true, message: 'Failed to load task data', type: 'error' });
+      } finally {
         setLoading(false);
+        setCreatorLoading(false);
       }
     };
-    
-    if (id) {
-      fetchData();
-    }
+    getInitialData();
   }, [id]);
   
-  // Filter employees based on selected team
   useEffect(() => {
     if (ticket.team && teams.length > 0 && employees.length > 0) {
       const selectedTeam = teams.find(team => team._id === ticket.team);
@@ -137,104 +228,86 @@ const EditTask = () => {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+
+  const handleEmployeeToggle = (employeeId) => {
+    setTicket(prev => {
+      const isSelected = prev.assignedTo.includes(employeeId);
+      let newAssignedTo;
+      if (isSelected) {
+        newAssignedTo = prev.assignedTo.filter(id => id !== employeeId);
+      } else {
+        newAssignedTo = [...prev.assignedTo, employeeId];
+      }
+      return { ...prev, assignedTo: newAssignedTo };
+    });
+  };
   
   const handleFileChange = (e) => {
-    setNewAttachments(e.target.files);
+    setAttachments(e.target.files);
   };
   
-  const handleDownloadAttachment = (attachment) => {
-    // Create download link
-    const link = document.createElement('a');
-    link.href = `http://localhost:5000/${attachment.path}`;
-    link.download = attachment.filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-  
-  const handleDeleteAttachment = async (attachmentId) => {
+  const handleRemoveAttachment = async (index) => {
     try {
-      await api.delete(`/tasks/${id}/attachments/${attachmentId}`);
-      
-      // Remove from local state
-      setExistingAttachments(prev => prev.filter(att => att._id !== attachmentId));
-      
-      setToast({ show: true, message: 'Attachment deleted successfully', type: 'success' });
+      const attachmentToRemove = existingAttachments[index];
+      if (attachmentToRemove._id) {
+        await api.delete(`/tasks/${id}/attachments/${attachmentToRemove._id}`);
+      }
+      const updatedAttachments = [...existingAttachments];
+      updatedAttachments.splice(index, 1);
+      setExistingAttachments(updatedAttachments);
+      setToast({ show: true, message: 'Attachment removed successfully', type: 'success' });
     } catch (err) {
       console.error(err);
-      setToast({ show: true, message: 'Failed to delete attachment', type: 'error' });
+      setToast({ show: true, message: 'Failed to remove attachment', type: 'error' });
     }
   };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    if (ticket.assignedTo.length === 0) {
+      setToast({ show: true, message: 'Please assign at least one employee to this ticket.', type: 'error' });
+      return;
+    }
+    
     try {
-      // Create FormData for file upload
+      setUploading(true);
       const formData = new FormData();
       
-      // Add all ticket fields to FormData
       Object.keys(ticket).forEach(key => {
-        if (key !== 'attachments') { // Don't include attachments in the main ticket data
+        if (key === 'assignedTo') {
+          formData.append(key, JSON.stringify(ticket[key]));
+        } else {
           formData.append(key, ticket[key]);
         }
       });
       
-      // Add new attachments if any
-      if (newAttachments.length > 0) {
-        for (let i = 0; i < newAttachments.length; i++) {
-          formData.append('attachments', newAttachments[i]);
+      if (attachments.length > 0) {
+        for (let i = 0; i < attachments.length; i++) {
+          formData.append('attachments', attachments[i]);
         }
       }
       
-      // Add existing attachment IDs to keep
-      const existingAttachmentIds = existingAttachments.map(att => att._id);
-      formData.append('existingAttachments', JSON.stringify(existingAttachmentIds));
-      
-      // Send to API with proper headers for FormData
       await api.put(`/tasks/${id}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       
       setToast({ show: true, message: 'Ticket updated successfully!', type: 'success' });
-      setTimeout(() => {
-        navigate("/tasks");
-      }, 1500);
+      setTimeout(() => navigate("/tasks"), 1500);
     } catch (err) {
       console.error(err);
-      setToast({ show: true, message: 'Failed to update ticket.', type: 'error' });
+      setToast({ show: true, message: err.response?.data?.error || 'Failed to update ticket.', type: 'error' });
+    } finally {
+      setUploading(false);
     }
   };
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-blue-100 flex flex-col">
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
         <Navbar />
         <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin h-12 w-12 border-t-4 border-blue-600 rounded-full"></div>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-  
-  if (fetchingError) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-blue-100 flex flex-col">
-        <Navbar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
-            <p className="text-gray-700 mb-6">{fetchingError}</p>
-            <button
-              onClick={() => navigate("/tasks")}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              Back to Tasks
-            </button>
-          </div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
         </div>
         <Footer />
       </div>
@@ -242,314 +315,394 @@ const EditTask = () => {
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-blue-100 flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
       <Navbar />
       
-      <div className="flex-1 p-6 max-w-4xl mx-auto w-full">
-        <h1 className="text-3xl font-extrabold text-blue-700 mb-6">Edit Ticket</h1>
+      <div className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full">
         
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6">
-          {/* Core Ticket Information */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Ticket Information</h2>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">Ticket Title *</label>
-              <input
-                type="text"
-                name="title"
-                value={ticket.title}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">Description</label>
-              <textarea
-                name="description"
-                value={ticket.description}
-                onChange={handleChange}
-                rows="4"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              ></textarea>
-            </div>
-          </div>
+        {/* Header */}
+        <div className="mb-8">
+          <Link 
+            to="/tasks"
+            className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-blue-600 transition mb-4 group"
+          >
+            <FiArrowLeft className="mr-2 group-hover:-translate-x-1 transition-transform" /> 
+            Back to Tasks
+          </Link>
           
-          {/* Assignment */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Assignment</h2>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Edit Ticket</h1>
+          <p className="text-slate-500 text-sm mt-1">Update ticket details, assignments, and progress</p>
+        </div>
+
+        {/* Form Card */}
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 md:p-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Team</label>
-                <select
-                  name="team"
-                  value={ticket.team}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Team</option>
-                  {teams.map(team => (
-                    <option key={team._id} value={team._id}>{team.team_name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Assigned To *</label>
-                <select
-                  name="assignedTo"
-                  value={ticket.assignedTo}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select Employee</option>
-                  {filteredEmployees.map(emp => (
-                    <option key={emp._id} value={emp._id}>{emp.name}</option>
-                  ))}
-                </select>
-                {ticket.team && filteredEmployees.length === 0 && (
-                  <p className="text-sm text-gray-500 mt-1">No members found in selected team</p>
-                )}
-                {ticket.team && filteredEmployees.length > 0 && (
-                  <p className="text-sm text-blue-600 mt-1">Showing team members only</p>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {/* Time Management */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Time Management</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Start Date</label>
-                <input
-                  type="date"
-                  name="startDate"
-                  value={ticket.startDate}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            {/* Core Ticket Information */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+                  <FiFileText className="text-blue-500" size={20} />
+                  <h2 className="text-lg font-bold text-slate-800">Ticket Information</h2>
               </div>
               
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Due Date *</label>
-                <input
-                  type="date"
-                  name="dueDate"
-                  value={ticket.dueDate}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Estimated Hours</label>
-                <input
-                  type="number"
-                  name="estimatedHours"
-                  value={ticket.estimatedHours}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.5"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Ticket Properties */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Ticket Properties</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Priority</label>
-                <select
-                  name="priority"
-                  value={ticket.priority}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Critical">Critical</option>
-                </select>
-              </div>
-              
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Status</label>
-                <select
-                  name="status"
-                  value={ticket.status}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Not Started">Not Started</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="On Hold">On Hold</option>
-                  <option value="Completed">Completed</option>
-                  <option value="In Review">In Review</option>
-                </select>
-              </div>
-              
-              <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">Category</label>
-                <select
-                  name="category"
-                  value={ticket.category}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Development">Development</option>
-                  <option value="Design">Design</option>
-                  <option value="Testing">Testing</option>
-                  <option value="Documentation">Documentation</option>
-                  <option value="Meeting">Meeting</option>
-                  <option value="Research">Research</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
-          {/* Additional Information */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Additional Information</h2>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">Tags</label>
-              <input
-                type="text"
-                name="tags"
-                value={ticket.tags}
-                onChange={handleChange}
-                placeholder="e.g., urgent, client, internal"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">Notes</label>
-              <textarea
-                name="notes"
-                value={ticket.notes}
-                onChange={handleChange}
-                rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              ></textarea>
-            </div>
-          </div>
-          
-          {/* Existing Attachments */}
-          {existingAttachments.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">Existing Attachments</h2>
-              <div className="space-y-2">
-                {existingAttachments.map((attachment, index) => (
-                  <div key={attachment._id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <FiFile className="text-blue-600" size={20} />
-                      <div>
-                        <p className="font-medium text-gray-800">{attachment.filename}</p>
-                        <p className="text-sm text-gray-500">
-                          Uploaded: {new Date(attachment.uploadDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadAttachment(attachment)}
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition"
-                        title="Download"
-                      >
-                        <FiDownload size={18} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAttachment(attachment._id)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition"
-                        title="Delete"
-                      >
-                        <FiTrash2 size={18} />
-                      </button>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Title */}
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                    Title
+                  </label>
+                  <div className="relative">
+                      <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                          <FiBriefcase size={18} />
+                      </span>
+                      <input
+                      type="text"
+                      name="title"
+                      value={ticket.title}
+                      onChange={handleChange}
+                      className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      placeholder="e.g. Fix Login Bug"
+                      required
+                      />
                   </div>
-                ))}
+                </div>
+
+                {/* Description */}
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    value={ticket.description}
+                    onChange={handleChange}
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+                    placeholder="Detailed description of the task..."
+                  />
+                </div>
               </div>
             </div>
-          )}
-          
-          {/* New Attachments */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              {existingAttachments.length > 0 ? "Add More Attachments" : "Attachments"}
-            </h2>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">Upload Documents</label>
-              <input
-                type="file"
-                onChange={handleFileChange}
-                multiple
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-sm text-gray-500 mt-1">You can upload multiple documents</p>
+
+            {/* Assignment */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+                  <FiUsers className="text-blue-500" size={20} />
+                  <h2 className="text-lg font-bold text-slate-800">Assignment</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Team */}
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                    Team
+                  </label>
+                  <div className="relative">
+                      <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                          <FiLayers size={18} />
+                      </span>
+                      <select
+                      name="team"
+                      value={ticket.team}
+                      onChange={handleChange}
+                      className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                      >
+                      <option value="">Select Team</option>
+                      {teams.map(team => (
+                        <option key={team._id} value={team._id}>{team.team_name}</option>
+                      ))}
+                      </select>
+                  </div>
+                </div>
+                
+                {/* Assigned To (Multi-select) */}
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                    Assigned To *
+                  </label>
+                  <div ref={dropdownRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
+                      className="w-full pl-11 pr-4 py-3 text-left border border-slate-200 rounded-xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all flex items-center justify-between h-[50px]"
+                    >
+                      <span className={`truncate ${ticket.assignedTo.length === 0 ? "text-slate-400" : ""}`}>
+                        {ticket.assignedTo.length === 0
+                          ? "Select Employees"
+                          : ticket.assignedTo.length === 1
+                          ? filteredEmployees.find(emp => emp._id === ticket.assignedTo[0])?.name || "Selected"
+                          : `${ticket.assignedTo.length} Employees Selected `
+                        }
+                      </span>
+                      <FiChevronDown className={`text-slate-400 transition-transform ml-2 flex-shrink-0 ${isAssigneeDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isAssigneeDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-auto">
+                        {filteredEmployees.length > 0 ? (
+                          filteredEmployees.map(emp => (
+                            <label key={emp._id} className="flex items-center px-4 py-2 hover:bg-blue-50 cursor-pointer transition-colors">
+                              <input
+                                type="checkbox"
+                                className="mr-3 h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                checked={ticket.assignedTo.includes(emp._id)}
+                                onChange={() => handleEmployeeToggle(emp._id)}
+                              />
+                              <span className="text-sm text-slate-700">{emp.name}</span>
+                            </label>
+                          ))
+                        ) : (
+                          <p className="px-4 py-2 text-sm text-slate-500 italic">No members found in selected team</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Creator Info (Read Only) */}
+                <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                        Created By
+                    </label>
+                    <div className="relative">
+                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                            <FiUser size={18} />
+                        </span>
+                        <input
+                            type="text"
+                            value={creatorLoading ? "Loading..." : taskCreator.name || "N/A"}
+                            readOnly
+                            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 focus:outline-none"
+                        />
+                    </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Time Management */}
+            <div className="space-y-6">
+                <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+                    <FiClock className="text-blue-500" size={20} />
+                    <h2 className="text-lg font-bold text-slate-800">Time Management</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                            Estimated Hours
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                                <FiClock size={18} />
+                            </span>
+                            <input
+                            type="number"
+                            name="estimatedHours"
+                            value={ticket.estimatedHours}
+                            onChange={handleChange}
+                            min="0"
+                            step="0.5"
+                            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                            Due Date
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                                <FiCalendar size={18} />
+                            </span>
+                            <input
+                            type="date"
+                            name="dueDate"
+                            value={ticket.dueDate}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            required
+                            />
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            {newAttachments.length > 0 && (
-              <div className="mt-2">
-                <p className="text-sm font-medium text-gray-700 mb-2">New Files:</p>
-                <ul className="list-disc list-inside text-sm text-gray-600">
-                  {Array.from(newAttachments).map((file, index) => (
-                    <li key={index}>{file.name}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          
-          {/* Notification Settings */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Notification Settings</h2>
+            {/* Properties */}
+            <div className="space-y-6">
+                <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+                    <FiAlertCircle className="text-blue-500" size={20} />
+                    <h2 className="text-lg font-bold text-slate-800">Properties</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                            Priority
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                                <FiAlertCircle size={18} />
+                            </span>
+                            <select
+                            name="priority"
+                            value={ticket.priority}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                            >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                            Category
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                                <FiTag size={18} />
+                            </span>
+                            <select
+                            name="category"
+                            value={ticket.category}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                            >
+                            <option value="Development">Development</option>
+                            <option value="Design">Design</option>
+                            <option value="Testing">Testing</option>
+                            <option value="Documentation">Documentation</option>
+                            <option value="Meeting">Meeting</option>
+                            <option value="Research">Research</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
-            <div className="mb-4">
-              <label className="flex items-center">
+            {/* Additional Info & Attachments */}
+            <div className="space-y-6">
+                <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+                    <FiTag className="text-blue-500" size={20} />
+                    <h2 className="text-lg font-bold text-slate-800">Additional Details</h2>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6">
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                            Tags
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+                                <FiTag size={18} />
+                            </span>
+                            <input
+                            type="text"
+                            name="tags"
+                            value={ticket.tags}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            placeholder="e.g. urgent, bug, feature"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                            Notes
+                        </label>
+                        <textarea
+                        name="notes"
+                        value={ticket.notes}
+                        onChange={handleChange}
+                        rows={3}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+                        placeholder="Internal notes..."
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Attachments */}
+            <div className="space-y-6">
+                <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+                    <FiUpload className="text-blue-500" size={20} />
+                    <h2 className="text-lg font-bold text-slate-800">Attachments</h2>
+                </div>
+                
+                {existingAttachments.length > 0 && (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-400 mb-2">Existing Files</p>
+                        <ul className="space-y-2">
+                        {existingAttachments.map((attachment, index) => (
+                            <li key={index} className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                            <span className="text-sm text-slate-700 truncate flex-1 mr-2">{attachment.filename}</span>
+                            <button
+                                type="button"
+                                onClick={() => handleRemoveAttachment(index)}
+                                className="text-red-500 hover:text-red-700 transition flex-shrink-0"
+                            >
+                                <FiTrash2 size={18} />
+                            </button>
+                            </li>
+                        ))}
+                        </ul>
+                    </div>
+                )}
+                
+                <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                        Upload New Files
+                    </label>
+                    <div className="relative group">
+                        <div className="absolute inset-0 border-2 border-dashed border-slate-300 rounded-xl pointer-events-none group-hover:border-blue-400 transition-colors"></div>
+                        <input
+                            type="file"
+                            onChange={handleFileChange}
+                            multiple
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all relative z-10"
+                        />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 ml-1">Supports multiple files</p>
+                </div>
+            </div>
+            
+            {/* Notification Settings */}
+            <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
                 <input
-                  type="checkbox"
-                  name="notifyAssignee"
-                  checked={ticket.notifyAssignee}
-                  onChange={handleChange}
-                  className="mr-2"
+                    type="checkbox"
+                    name="notifyAssignee"
+                    checked={ticket.notifyAssignee}
+                    onChange={handleChange}
+                    className="h-5 w-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                 />
-                <span className="text-gray-700">Notify assignee when ticket is updated</span>
-              </label>
+                <span className="text-sm font-medium text-slate-700">Notify assignees when ticket is updated</span>
             </div>
-          </div>
-          
-          {/* Form Actions */}
-          <div className="flex justify-end gap-4">
-            <button
-              type="button"
-              onClick={() => navigate("/tasks")}
-              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              Update Ticket
-            </button>
-          </div>
-        </form>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-4 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => navigate("/tasks")}
+                className="flex-1 px-6 py-3.5 rounded-xl border border-slate-200 text-slate-700 font-semibold bg-white hover:bg-slate-50 transition shadow-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-6 py-3.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+                disabled={uploading || userLoading}
+              >
+                {uploading ? "Updating..." : (
+                    <>
+                        <FiSave size={18} />
+                        Update Ticket
+                    </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
       
       <Toast 

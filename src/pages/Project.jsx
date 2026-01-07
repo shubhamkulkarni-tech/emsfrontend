@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from "react";
 import API from "../api/axios";
-import { FiCalendar, FiUser, FiMoreVertical, FiFolder } from "react-icons/fi";
-import { Tooltip } from "react-tooltip";
-import "react-tooltip/dist/react-tooltip.css";
+import { 
+  FiCalendar, FiUser, FiMoreVertical, FiFolder, FiSearch, 
+  FiX, FiBriefcase, FiFilter, FiEdit, FiTrash2, FiCheckCircle, FiClock
+} from "react-icons/fi";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
 import { useNavigate } from "react-router-dom";
 
+// --- AESTHETIC THEME PALETTE ---
 const statusColors = {
-  "In Progress": "bg-yellow-500",
-  Completed: "bg-green-500",
-  "On Hold": "bg-red-500",
-  DEFAULT: "bg-gray-500",
+  "In Progress": { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", dot: "bg-yellow-500" },
+  "Completed": { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500" },
+  "On Hold": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
+  DEFAULT: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" },
 };
 
 const Projects = () => {
@@ -34,15 +36,15 @@ const Projects = () => {
   const [toDate, setToDate] = useState("");
   const [teams, setTeams] = useState([]);
   const [managers, setManagers] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(null);
+  
+  // Dropdown State
+  const [dropdownOpen, setDropdownOpen] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  
   const [userRole, setUserRole] = useState("");
-  const [toast, setToast] = useState({
-    show: false,
-    message: "",
-    type: "success",
-  });
+  const [isHoveringCreateBtn, setIsHoveringCreateBtn] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   const [page, setPage] = useState(1);
   const limit = 12;
@@ -92,7 +94,7 @@ const Projects = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch when filters change or when returning from edit
+  // Re-fetch when filters change
   useEffect(() => {
     const timer = setTimeout(() => {
       setPage(1);
@@ -102,16 +104,16 @@ const Projects = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter, teamFilter, managerFilter, fromDate, toDate]);
 
-  // Refresh data when component becomes visible (returning from edit)
+  // Click Outside to Close Dropdown
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchProjects(page);
+    const handleClickOutside = (event) => {
+      if (dropdownOpen && !event.target.closest('.dropdown-actions')) {
+        setDropdownOpen(null);
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [page]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownOpen]);
 
   const resetFilters = () => {
     setSearch("");
@@ -127,7 +129,7 @@ const Projects = () => {
   const confirmDelete = (id) => {
     setDeleteId(id);
     setModalOpen(true);
-    setShowDropdown(null);
+    setDropdownOpen(null);
   };
 
   const handleDelete = async () => {
@@ -135,7 +137,6 @@ const Projects = () => {
       await API.delete(`/projects/${deleteId}`);
       setModalOpen(false);
       setDeleteId(null);
-      // refresh
       fetchProjects(page);
       setToast({ 
         show: true, 
@@ -169,238 +170,306 @@ const Projects = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-blue-100">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
       <Navbar />
 
-      <div className="flex-1 p-6 max-w-7xl mx-auto">
+      <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+        
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-          <h1 className="text-4xl font-extrabold text-blue-700">
-            Projects Overview
-          </h1>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Projects Directory</h1>
+            <p className="text-slate-500 text-sm mt-1">Manage projects, teams, and deadlines</p>
+          </div>
+          
+          <div className="flex gap-3 w-full md:w-auto items-center h-full">
+            <div className="relative w-full md:w-80">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">
+                <FiSearch />
+              </span>
+              <input
+                type="text"
+                placeholder="Search by name or manager..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
 
-          {(userRole === "admin" || userRole === "manager") && (
-            <button
-              onClick={() => navigate("/add-project")}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full shadow-lg"
-            >
-              + Add Project
-            </button>
-          )}
+            {(userRole === "admin" || userRole === "manager") && (
+              <button
+                onClick={() => navigate("/add-project")}
+                onMouseEnter={() => setIsHoveringCreateBtn(true)}
+                onMouseLeave={() => setIsHoveringCreateBtn(false)}
+                style={{
+                  backgroundColor: isHoveringCreateBtn ? 'rgb(255, 172, 28)' : 'rgb(37, 99, 235)', 
+                  color: '#fff',
+                  boxShadow: isHoveringCreateBtn ? '0 10px 15px -3px rgba(255, 172, 28, 0.4)' : '0 10px 15px -3px rgba(37, 99, 235, 0.4)',
+                  transform: isHoveringCreateBtn ? 'translateY(-2px)' : 'translateY(0)'
+                }}
+                className="h-full px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium border border-transparent transition-all duration-300 ease-out"
+              >
+                <FiBriefcase size={18} />
+                <span>Add Project</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Summary bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-xl shadow text-center">
-            <div className="text-sm text-gray-500">Total Projects</div>
-            <div className="text-2xl font-bold text-blue-700">{summary.total}</div>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow text-center">
-            <div className="text-sm text-gray-500">Completed</div>
-            <div className="text-2xl font-bold text-green-600">{summary.completed}</div>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow text-center">
-            <div className="text-sm text-gray-500">In Progress</div>
-            <div className="text-2xl font-bold text-yellow-600">{summary.inProgress}</div>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow text-center">
-            <div className="text-sm text-gray-500">On Hold</div>
-            <div className="text-2xl font-bold text-red-600">{summary.onHold}</div>
+        {/* Stats Grid */}
+        {!loading && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0"><FiFolder size={24} /></div>
+                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Projects</p><p className="text-2xl font-bold text-slate-800">{summary.total}</p></div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0"><FiCheckCircle size={24} /></div>
+                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Completed</p><p className="text-2xl font-bold text-slate-800">{summary.completed}</p></div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 shrink-0"><FiClock size={24} /></div>
+                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">In Progress</p><p className="text-2xl font-bold text-slate-800">{summary.inProgress}</p></div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0"><FiClock size={24} /></div>
+                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">On Hold</p><p className="text-2xl font-bold text-slate-800">{summary.onHold}</p></div>
+                </div>
+            </div>
+        )}
+
+        {/* FILTER BAR */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
+          <div className="flex flex-col md:flex-row gap-3 items-end">
+            <div className="flex-1 min-w-[200px]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Status</label>
+                <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                >
+                <option value="">All Status</option>
+                <option value="Completed">Completed</option>
+                <option value="In Progress">In Progress</option>
+                <option value="On Hold">On Hold</option>
+                </select>
+            </div>
+
+            <div className="flex-1 min-w-[200px]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Team</label>
+                <select
+                value={teamFilter}
+                onChange={(e) => setTeamFilter(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                >
+                <option value="">All Teams</option>
+                {teams.map((t) => (
+                    <option key={t._id} value={t._id}>
+                    {t.team_name}
+                    </option>
+                ))}
+                </select>
+            </div>
+
+            <div className="flex-1 min-w-[200px]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Manager</label>
+                <select
+                value={managerFilter}
+                onChange={(e) => setManagerFilter(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                >
+                <option value="">All Managers</option>
+                {managers.map((m) => (
+                    <option key={m._id} value={m._id}>
+                    {m.name}
+                    </option>
+                ))}
+                </select>
+            </div>
+
+            <div className="flex-1 min-w-[150px]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">From</label>
+                <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                />
+            </div>
+
+            <div className="flex-1 min-w-[150px]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">To</label>
+                <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                />
+            </div>
+
+            <div className="pb-1">
+                <button
+                onClick={resetFilters}
+                className="h-11 px-6 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition flex items-center justify-center gap-2"
+                >
+                <FiFilter size={16} /> Reset
+                </button>
+            </div>
           </div>
         </div>
 
-        {/* 🔍 FILTER BAR */}
-        <div className="bg-white rounded-2xl shadow p-4 mb-6 flex flex-wrap gap-3 items-center">
-          <input
-            type="text"
-            placeholder="Search by name or manager"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-4 py-2 rounded-full border w-full sm:w-56"
-          />
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 rounded-full border"
-          >
-            <option value="">All Status</option>
-            <option value="Completed">Completed</option>
-            <option value="In Progress">In Progress</option>
-            <option value="On Hold">On Hold</option>
-          </select>
-
-          <select
-            value={teamFilter}
-            onChange={(e) => setTeamFilter(e.target.value)}
-            className="px-4 py-2 rounded-full border"
-          >
-            <option value="">All Teams</option>
-            {teams.map((t) => (
-              <option key={t._id} value={t._id}>
-                {t.team_name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={managerFilter}
-            onChange={(e) => setManagerFilter(e.target.value)}
-            className="px-4 py-2 rounded-full border"
-          >
-            <option value="">All Managers</option>
-            {managers.map((m) => (
-              <option key={m._id} value={m._id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="px-4 py-2 rounded-full border"
-          />
-
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="px-4 py-2 rounded-full border"
-          />
-
-          <button
-            onClick={resetFilters}
-            className="px-6 py-2 rounded-full border bg-gray-100 hover:bg-gray-200"
-          >
-            Reset
-          </button>
-        </div>
-
-        {/* PROJECT CARDS */}
+        {/* List View - COMPACT HORIZONTAL TABLE */}
         {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="animate-spin h-12 w-12 border-t-4 border-blue-600 rounded-full" />
+          <div className="flex flex-col justify-center items-center py-32">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
+            <p className="mt-4 text-slate-500 text-sm animate-pulse">Loading projects...</p>
           </div>
         ) : error ? (
           <p className="text-red-500 text-center text-lg">{error}</p>
         ) : projects.length === 0 ? (
-          <p className="text-center text-gray-600">No projects found.</p>
+          <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-slate-100">
+            <FiFolder className="mx-auto h-16 w-16 text-slate-300 mb-4" />
+            <p className="text-slate-500 font-medium">No projects found.</p>
+          </div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8 mb-6">
-              {projects.map((proj) => (
-                <div
-                  key={proj._id}
-                  className="relative bg-white rounded-3xl shadow-md p-6 border hover:scale-105 transition"
-                >
-                  {(userRole === "admin" || userRole === "manager") && (
-                    <div className="absolute top-4 right-4">
-                      <button
-                        className="p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition"
-                        onClick={() => setShowDropdown(showDropdown === proj._id ? null : proj._id)}
-                      >
-                        <FiMoreVertical />
-                      </button>
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                    <th className="px-4 py-3 w-[25%]">Project Info</th>
+                    <th className="px-4 py-3 w-[20%]">Team</th>
+                    <th className="px-4 py-3 w-[20%]">Manager</th>
+                    <th className="px-4 py-3 w-[15%]">Deadline</th>
+                    <th className="px-4 py-3 w-[10%]">Status</th>
+                    <th className="px-4 py-3 w-[10%] text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {projects.map((proj) => {
+                      const displayStatus = proj.status || "Unknown";
+                      const statusStyle = statusColors[displayStatus] || statusColors.DEFAULT;
+                      return (
+                        <tr key={proj._id} className="hover:bg-blue-50/30 transition duration-200 group">
+                          <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/edit-project/${proj._id}`)}>
+                            <div className="flex flex-col justify-center">
+                                <span className="font-bold text-slate-800 text-xs truncate group-hover:text-blue-600 transition-colors max-w-[220px]">{proj.project_name}</span>
+                                <span className="text-[10px] text-slate-400 font-mono mt-0.5">{proj.project_id || "N/A"}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                              <span className="text-xs text-slate-600 font-medium truncate block max-w-[150px]">{proj.team?.team_name || "N/A"}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px] font-bold">
+                                    {proj.manager?.name?.charAt(0) || '?'}
+                                  </div>
+                                  <span className="text-xs text-slate-700 truncate">{proj.manager?.name || "Unassigned"}</span>
+                              </div>
+                          </td>
+                          <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                  <FiCalendar className="text-slate-400 shrink-0" size={12} />
+                                  <span className="text-xs text-slate-600">{proj.deadline ? new Date(proj.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'}) : "Not Set"}</span>
+                              </div>
+                          </td>
+                          <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border flex items-center gap-1 w-max ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                                  <span className={`w-1 h-1 rounded-full ${statusStyle.dot}`}></span>
+                                  {displayStatus}
+                              </span>
+                          </td>
+                          <td className="px-4 py-3 text-right relative dropdown-actions">
+                            <div className="inline-block relative">
+                              <button
+                                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDropdownOpen(dropdownOpen === proj._id ? null : proj._id);
+                                }}
+                              >
+                                <FiMoreVertical className="text-lg" />
+                              </button>
+                              
+                              {/* Dropdown Menu */}
+                              <div
+                                className={`absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-2xl border border-slate-100 z-20 overflow-hidden transition-all duration-200 origin-top-right ${
+                                  dropdownOpen === proj._id
+                                    ? "opacity-100 scale-100 visible"
+                                    : "opacity-0 scale-95 invisible"
+                                }`}
+                              >
+                                {/* Edit */}
+                                <button
+                                  className="block w-full text-left px-4 py-2.5 text-xs font-medium text-slate-700 hover:bg-blue-50 flex items-center gap-2 hover:text-blue-600 transition-colors"
+                                  onClick={() => {
+                                    navigate(`/edit-project/${proj._id}`);
+                                    setDropdownOpen(null);
+                                  }}
+                                >
+                                  <FiEdit size={14}/> Edit Project
+                                </button>
+                                
+                                <div className="border-t border-slate-100"></div>
 
-                      <div className={`absolute right-0 mt-2 w-32 bg-white border border-gray-300 rounded-md shadow-lg z-10 overflow-hidden transition-all duration-300 ${showDropdown === proj._id ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-                        <button
-                          className="block w-full text-left px-4 py-2 hover:bg-blue-100"
-                          onClick={() => navigate(`/edit-project/${proj._id}`)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="block w-full text-left px-4 py-2 hover:bg-red-100 text-red-600"
-                          onClick={() => confirmDelete(proj._id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-center mb-4">
-                    <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                      <FiFolder size={28} />
-                    </div>
-                  </div>
-
-                  <h2 className="text-xl font-semibold text-blue-700">
-                    {proj.project_name}
-                  </h2>
-
-                  <p className="text-sm text-gray-600 mt-1">
-                    <b>Project ID:</b> {proj.project_id || "N/A"}
-                  </p>
-
-                  <p className="text-gray-600 text-sm mt-3 mb-2">
-                    {proj.description || "No description provided."}
-                  </p>
-
-                  <span
-                    className={`inline-block mt-2 px-3 py-1 rounded-full text-white text-sm ${
-                      statusColors[proj.status] || statusColors.DEFAULT
-                    }`}
-                  >
-                    {proj.status}
-                  </span>
-
-                  <div className="mt-3 text-sm flex items-center gap-2">
-                    <FiUser /> {proj.manager?.name || "N/A"}
-                  </div>
-
-                  <div className="text-sm flex items-center gap-2" 
-                       data-tooltip-id={`deadline-${proj._id}`} 
-                       data-tooltip-content={`Deadline: ${proj.deadline ? new Date(proj.deadline).toLocaleDateString() : "Not set"}`}>
-                    <FiCalendar />
-                    {proj.deadline
-                      ? new Date(proj.deadline).toLocaleDateString()
-                      : "Not Set"}
-                  </div>
-                  <Tooltip id={`deadline-${proj._id}`} />
-                </div>
-              ))}
+                                {/* Delete */}
+                                <button
+                                  className="block w-full text-left px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                  onClick={() => confirmDelete(proj._id)}
+                                >
+                                  <FiTrash2 size={14}/> Delete
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
             </div>
 
             {/* Pagination */}
-            <div className="flex justify-center items-center gap-4">
+            <div className="p-4 border-t border-slate-100 flex justify-center items-center gap-4 bg-slate-50/50">
               <button 
                 onClick={prevPage} 
-                className="px-4 py-2 rounded border hover:bg-gray-100"
+                className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={page === 1}
               >
                 Previous
               </button>
-              <div>Page {page}</div>
+              <div className="text-xs font-bold text-slate-500">Page {page}</div>
               <button 
                 onClick={nextPage} 
-                className="px-4 py-2 rounded border hover:bg-gray-100"
+                className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={projects.length < limit}
               >
                 Next
               </button>
             </div>
-          </>
+          </div>
         )}
       </div>
 
       {/* Delete Confirmation Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-xl shadow-lg p-6 w-96 text-center animate-fadeIn">
-            <h2 className="text-xl font-semibold text-red-600 mb-4">Confirm Delete</h2>
-            <p className="mb-6">Are you sure you want to delete this project?</p>
-            <div className="flex justify-center gap-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-96 text-center animate-[fadeIn_0.2s_ease-out]">
+            <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Delete Project?</h2>
+            <p className="text-slate-500 mb-6 text-sm leading-relaxed">This will permanently remove this project and all associated tasks. This action cannot be undone.</p>
+            <div className="flex justify-center gap-3">
               <button 
-                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition" 
+                className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition font-medium text-sm" 
                 onClick={() => setModalOpen(false)}
               >
                 Cancel
               </button>
               <button 
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" 
+                className="px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium text-sm shadow-lg shadow-red-200" 
                 onClick={handleDelete}
               >
                 Delete
@@ -409,6 +478,13 @@ const Projects = () => {
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
 
       <Toast
         message={toast.message}
@@ -423,377 +499,3 @@ const Projects = () => {
 };
 
 export default Projects;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useEffect, useState } from "react";
-// import API from "../api/axios";
-// import { FiCalendar, FiUser, FiMoreVertical, FiFolder } from "react-icons/fi";
-// import { Tooltip } from "react-tooltip";
-// import "react-tooltip/dist/react-tooltip.css";
-// import Navbar from "../components/Navbar";
-// import Footer from "../components/Footer";
-// import Toast from "../components/Toast";
-// import { useNavigate } from "react-router-dom";
-
-// const statusColors = {
-//   "In Progress": "bg-yellow-500",
-//   Completed: "bg-green-500",
-//   "On Hold": "bg-red-500",
-//   DEFAULT: "bg-gray-500",
-// };
-
-// const Projects = () => {
-//   const [projects, setProjects] = useState([]);
-//   const [summary, setSummary] = useState({ total: 0, completed: 0, inProgress: 0, onHold: 0 });
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState("");
-//   const [search, setSearch] = useState("");
-//   const [statusFilter, setStatusFilter] = useState("");
-//   const [teamFilter, setTeamFilter] = useState("");
-//   const [managerFilter, setManagerFilter] = useState("");
-//   const [fromDate, setFromDate] = useState("");
-//   const [toDate, setToDate] = useState("");
-//   const [teams, setTeams] = useState([]);
-//   const [managers, setManagers] = useState([]);
-//   const [showDropdown, setShowDropdown] = useState(null);
-//   const [modalOpen, setModalOpen] = useState(false);
-//   const [deleteId, setDeleteId] = useState(null);
-//   const [userRole, setUserRole] = useState("");
-//   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-
-//   const [page, setPage] = useState(1);
-//   const [limit] = useState(12);
-
-//   const navigate = useNavigate();
-
-//   // fetch teams & managers for filters
-//   useEffect(() => {
-//     const role = localStorage.getItem("role") || "";
-//     setUserRole(role.toLowerCase());
-    
-//     (async () => {
-//       try {
-//         const [tRes, mRes] = await Promise.all([
-//           API.get("/teams"),
-//           API.get("/users/managers"),
-//         ]);
-//         setTeams(tRes.data || []);
-//         setManagers(mRes.data || []);
-//       } catch (err) {
-//         console.error("Failed to load teams/managers", err);
-//       }
-//     })();
-//   }, []);
-
-//   // fetch projects with filters
-//   const fetchProjects = async (p = page) => {
-//     setLoading(true);
-//     setError("");
-//     try {
-//       const params = {
-//         page: p,
-//         limit,
-//       };
-//       if (search) params.search = search;
-//       if (statusFilter) params.status = statusFilter;
-//       if (teamFilter) params.team = teamFilter;
-//       if (managerFilter) params.manager = managerFilter;
-//       if (fromDate) params.from = fromDate;
-//       if (toDate) params.to = toDate;
-
-//       const res = await API.get("/projects", { params });
-//       // backend returns { projects, summary }
-//       const data = res.data || {};
-//       setProjects(data.projects || []);
-//       setSummary(data.summary || { total: 0, completed: 0, inProgress: 0, onHold: 0 });
-//     } catch (err) {
-//       console.error("Error fetching projects:", err);
-//       setError("Failed to fetch projects.");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchProjects(1);
-//     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, []);
-
-//   // re-fetch when filters change or when returning from edit
-//   useEffect(() => {
-//     const timer = setTimeout(() => {
-//       setPage(1);
-//       fetchProjects(1);
-//     }, 350); // debounce
-//     return () => clearTimeout(timer);
-//     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, [search, statusFilter, teamFilter, managerFilter, fromDate, toDate]);
-
-//   // Refresh data when component becomes visible (returning from edit)
-//   useEffect(() => {
-//     const handleVisibilityChange = () => {
-//       if (!document.hidden) {
-//         fetchProjects(page);
-//       }
-//     };
-//     document.addEventListener('visibilitychange', handleVisibilityChange);
-//     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-//   }, [page]);
-
-//   const confirmDelete = (id) => {
-//     setDeleteId(id);
-//     setModalOpen(true);
-//     setShowDropdown(null);
-//   };
-
-//   const handleDelete = async () => {
-//     try {
-//       await API.delete(`/projects/${deleteId}`);
-//       setModalOpen(false);
-//       setDeleteId(null);
-//       // refresh
-//       fetchProjects(page);
-//       setToast({ show: true, message: 'Project deleted successfully!', type: 'success' });
-//     } catch (err) {
-//       console.error(err);
-//       setToast({ show: true, message: 'Failed to delete project.', type: 'error' });
-//     }
-//   };
-
-//   const nextPage = () => {
-//     setPage((p) => {
-//       const np = p + 1;
-//       fetchProjects(np);
-//       return np;
-//     });
-//   };
-//   const prevPage = () => {
-//     setPage((p) => {
-//       const np = Math.max(1, p - 1);
-//       fetchProjects(np);
-//       return np;
-//     });
-//   };
-
-//   return (
-//     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-blue-100">
-//       <Navbar />
-//       <div className="flex-1 p-6 max-w-7xl mx-auto">
-//         {/* Header */}
-//         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-//           <h1 className="text-4xl font-extrabold text-blue-700">Projects Overview</h1>
-
-//           <div className="flex gap-3 flex-col sm:flex-row w-full sm:w-auto">
-//             {(userRole === "admin" || userRole === "manager") && (
-//               <div className="hidden sm:flex items-center bg-white rounded-full px-3 shadow-sm border border-gray-200">
-//                 <input
-//                   type="text"
-//                   placeholder="Search by name or manager..."
-//                   className="px-4 py-2 rounded-full focus:outline-none"
-//                   value={search}
-//                   onChange={(e) => setSearch(e.target.value)}
-//                 />
-//               </div>
-//             )}
-
-//             {(userRole === "admin" || userRole === "manager") && (
-//               <button
-//                 onClick={() => navigate("/add-project")}
-//                 className="bg-blue-600 text-white px-5 py-2 rounded-full shadow-lg hover:bg-blue-700 transition flex items-center gap-2"
-//               >
-//                 + Add Project
-//               </button>
-//             )}
-//           </div>
-//         </div>
-
-//         {/* Summary bar */}
-//         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-//           <div className="bg-white p-4 rounded-xl shadow text-center">
-//             <div className="text-sm text-gray-500">Total Projects</div>
-//             <div className="text-2xl font-bold text-blue-700">{summary.total}</div>
-//           </div>
-//           <div className="bg-white p-4 rounded-xl shadow text-center">
-//             <div className="text-sm text-gray-500">Completed</div>
-//             <div className="text-2xl font-bold text-green-600">{summary.completed}</div>
-//           </div>
-//           <div className="bg-white p-4 rounded-xl shadow text-center">
-//             <div className="text-sm text-gray-500">In Progress</div>
-//             <div className="text-2xl font-bold text-yellow-600">{summary.inProgress}</div>
-//           </div>
-//           <div className="bg-white p-4 rounded-xl shadow text-center">
-//             <div className="text-sm text-gray-500">On Hold</div>
-//             <div className="text-2xl font-bold text-red-600">{summary.onHold}</div>
-//           </div>
-//         </div>
-
-//         {/* Filters (Only for admin and manager) */}
-//         {(userRole === "admin" || userRole === "manager") && (
-//           <div className="bg-white p-4 rounded-xl shadow mb-6">
-//             <div className="flex flex-col sm:flex-row gap-3 items-center">
-//               <div className="w-full sm:w-1/3">
-//                 <input
-//                   className="w-full px-4 py-2 rounded-full border"
-//                   placeholder="Search by name or manager..."
-//                   value={search}
-//                   onChange={(e) => setSearch(e.target.value)}
-//                 />
-//               </div>
-
-//               <select className="px-4 py-2 rounded-full border" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-//                 <option value="">All Status</option>
-//                 <option value="In Progress">In Progress</option>
-//                 <option value="Completed">Completed</option>
-//                 <option value="On Hold">On Hold</option>
-//               </select>
-
-//               <select className="px-4 py-2 rounded-full border" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}>
-//                 <option value="">All Teams</option>
-//                 {teams.map((t) => (
-//                   <option key={t._id} value={t._id}>
-//                     {t.team_name}
-//                   </option>
-//                 ))}
-//               </select>
-
-//               <select className="px-4 py-2 rounded-full border" value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)}>
-//                 <option value="">All Managers</option>
-//                 {managers.map((m) => (
-//                   <option key={m._id} value={m._id}>
-//                     {m.name}
-//                   </option>
-//                 ))}
-//               </select>
-
-//               <div className="flex items-center gap-2">
-//                 <label className="text-sm text-gray-600">From</label>
-//                 <input type="date" className="px-3 py-2 rounded-full border" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-//               </div>
-
-//               <div className="flex items-center gap-2">
-//                 <label className="text-sm text-gray-600">To</label>
-//                 <input type="date" className="px-3 py-2 rounded-full border" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-//               </div>
-
-//               <button onClick={() => { setSearch(""); setStatusFilter(""); setTeamFilter(""); setManagerFilter(""); setFromDate(""); setToDate(""); fetchProjects(1); }} className="px-4 py-2 rounded-full border">
-//                 Reset
-//               </button>
-//             </div>
-//           </div>
-//         )}
-
-//         {/* Content */}
-//         {loading ? (
-//           <div className="flex justify-center items-center py-20">
-//             <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
-//           </div>
-//         ) : error ? (
-//           <p className="text-red-500 text-center text-lg">{error}</p>
-//         ) : projects.length === 0 ? (
-//           <p className="text-gray-600 text-center text-lg mt-10">No projects found.</p>
-//         ) : (
-//           <>
-//             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8 mb-6">
-//               {projects.map((proj, index) => (
-//                 <div
-//                   key={proj._id || proj.project_id || index}
-//                   className="relative bg-white rounded-3xl shadow-md p-6 flex flex-col text-left border border-blue-200 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl"
-//                 >
-//                   {(userRole === "admin" || userRole === "manager") && (
-//                     <div className="absolute top-4 right-4">
-//                       <button className="p-1 rounded-full bg-gray-100 hover:bg-gray-200 transition" onClick={() => setShowDropdown(showDropdown === proj._id ? null : proj._id)}>
-//                         <FiMoreVertical />
-//                       </button>
-
-//                       <div className={`absolute right-0 mt-2 w-32 bg-white border border-gray-300 rounded-md shadow-lg z-10 overflow-hidden transition-all duration-300 ${showDropdown === proj._id ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-//                         <button className="block w-full text-left px-4 py-2 hover:bg-blue-100" onClick={() => navigate(`/edit-project/${proj._id}`)}>
-//                           Edit
-//                         </button>
-//                         <button className="block w-full text-left px-4 py-2 hover:bg-red-100 text-red-600" onClick={() => confirmDelete(proj._id)}>
-//                           Delete
-//                         </button>
-//                       </div>
-//                     </div>
-//                   )}
-
-//                   <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4 shadow-sm">
-//                     <FiFolder size={28} />
-//                   </div>
-
-//                   <h2 className="text-xl font-semibold text-blue-700 mb-1">{proj.project_name || "Untitled"}</h2>
-
-//                   <span className={`text-white px-3 py-1 rounded-full text-sm ${statusColors[proj.status] || statusColors.DEFAULT}`}>
-//                     {proj.status || "Unknown"}
-//                   </span>
-
-//                   <p className="text-gray-600 text-sm mt-3 mb-2">{proj.description || "No description provided."}</p>
-
-//                   <div className="flex items-center gap-2 text-gray-700 mt-auto text-sm">
-//                     <FiUser className="text-blue-600" /> {proj.manager?.name || "N/A"}
-//                   </div>
-//                   <div className="flex items-center gap-2 text-gray-600 text-sm" data-tooltip-id={`deadline-${proj._id}`} data-tooltip-content={`Deadline: ${proj.end_date ? new Date(proj.end_date).toLocaleDateString() : "Not set"}`}>
-//                     <FiCalendar className="text-blue-600" /> {proj.end_date ? new Date(proj.end_date).toLocaleDateString() : "Not Set"}
-//                   </div>
-//                   <Tooltip id={`deadline-${proj._id}`} />
-//                 </div>
-//               ))}
-//             </div>
-
-//             {/* Pagination (simple) */}
-//             <div className="flex justify-center items-center gap-4">
-//               <button onClick={prevPage} className="px-4 py-2 rounded border">Previous</button>
-//               <div>Page {page}</div>
-//               <button onClick={nextPage} className="px-4 py-2 rounded border">Next</button>
-//             </div>
-//           </>
-//         )}
-//       </div>
-
-//       {/* Delete Confirmation */}
-//       {modalOpen && (
-//         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-//           <div className="bg-white rounded-xl shadow-lg p-6 w-96 text-center animate-fadeIn">
-//             <h2 className="text-xl font-semibold text-red-600 mb-4">Confirm Delete</h2>
-//             <p className="mb-6">Are you sure you want to delete this project?</p>
-//             <div className="flex justify-center gap-4">
-//               <button className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition" onClick={() => setModalOpen(false)}>Cancel</button>
-//               <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" onClick={handleDelete}>Delete</button>
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-//       <Toast 
-//         message={toast.message}
-//         type={toast.type}
-//         isVisible={toast.show}
-//         onClose={() => setToast({ ...toast, show: false })}
-//       />
-
-//       <Footer />
-//     </div>
-//   );
-// };
-
-// export default Projects;
-
-
-
-
-
-
-
-

@@ -2,28 +2,36 @@ import React, { useEffect, useState } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { 
+  FiActivity, FiCheckCircle, FiClock, FiUsers, 
+  FiTrendingUp, FiSettings, FiArrowRight, FiCalendar, FiUser // Added FiUser here
+} from "react-icons/fi";
+import Toast from './Toast';
 import {
   PieChart, Pie, Cell, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer
 } from 'recharts';
-import { User } from 'lucide-react'
 
-// Import the images
-import taskIcon from '../assets/total-task.png';
-import completedTaskIcon from '../assets/complete-task.jpg';
-import pendingTaskIcon from '../assets/pending-tasks.png';
-import performanceIcon from '../assets/performance.png';
-import userIcon from '../assets/user.jpg';
+// --- API SETUP ---
+const api = axios.create({
+  baseURL: "https://emsbackend-2w9c.onrender.com/api",
+});
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-// TaskDistributionChart component definition
+// --- CHART COMPONENTS ---
+const COLORS = ['#22c55e', '#f97316', '#3b82f6']; // Green, Orange, Blue
+
 const TaskDistributionChart = ({ completed, pending, inProgress }) => {
   const pieData = [
     { name: 'Completed', value: completed },
     { name: 'Pending', value: pending },
     { name: 'In Progress', value: inProgress }
   ];
-
-  const COLORS = ['#22c55e', '#f97316', '#3b82f6'];
 
   return (
     <ResponsiveContainer width="100%" height={250}>
@@ -41,7 +49,14 @@ const TaskDistributionChart = ({ completed, pending, inProgress }) => {
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip />
+        <Tooltip 
+          contentStyle={{ 
+            backgroundColor: 'white', 
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            color: '#334155'
+          }}
+        />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -52,13 +67,14 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  
+  const navigate = useNavigate();
 
-  // Fetch dashboard data
   const fetchDashboardData = async () => {
     if (!user) return;
-
     try {
-      const response = await axios.get(`http://localhost:5000/api/dashboard/${user.employeeId}`);
+      const response = await api.get(`/dashboard/${user.employeeId}`);
       setStats(response.data);
       setLoading(false);
       setError(null);
@@ -66,116 +82,128 @@ const Dashboard = () => {
       console.error('Error fetching dashboard data:', error);
       setLoading(false);
       setError('Failed to load dashboard data. Please try again later.');
+      setToast({ show: true, message: 'Failed to load dashboard data', type: 'error' });
     }
   };
 
   useEffect(() => {
     fetchDashboardData();
-
-    // Auto-refresh every 30s (optional)
     const interval = setInterval(fetchDashboardData, 30000);
     return () => clearInterval(interval);
   }, [user]);
 
-  if (!user) return <p className="p-10 text-lg font-medium text-gray-600">Loading user...</p>;
-  if (loading) return <p className="p-10 text-lg font-medium text-gray-600">Fetching dashboard data...</p>;
-  if (error) return <p className="p-10 text-lg font-medium text-red-600">{error}</p>;
-  if (!stats) return <p className="p-10 text-lg font-medium text-red-600">Failed to load data.</p>;
+  if (!user) return <p className="p-10 text-center text-slate-600">Loading user information...</p>;
 
-  const { role, employeeId } = user;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
+  if (error || !stats) return <p className="p-10 text-center text-red-600">Unable to load dashboard data.</p>;
+
+  const { role, name } = user;
+
+  // Dummy Data for Weekly Chart (as per original code)
   const barData = [
     { name: 'Week 1', Performance: 70 },
     { name: 'Week 2', Performance: 76 },
     { name: 'Week 3', Performance: 80 },
-    { name: 'Week 4', Performance: stats.performance },
+    { name: 'Week 4', Performance: stats.performance || 0 },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
       <Navbar />
 
-      <div className="p-8 flex-1">
-        {/* Welcome Header */}
+      <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+        
+        {/* Header */}
         <div className="mb-8">
-          <h1 
-            className="text-4xl font-bold mb-4"
-            style={{
-              background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text"
-            }}
-          >
-            Welcome, {user.name}
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+            Welcome back, <span className="text-blue-600">{name}</span>
           </h1>
-          <h2 className="text-xl font-semibold text-gray-600">
-            Role: <span className="text-blue-600 font-bold">{role.toUpperCase()}</span>
-          </h2>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="bg-blue-100 text-blue-700 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border border-blue-200">
+              {role}
+            </span>
+            <span className="text-slate-500 text-sm">Dashboard Overview</span>
+          </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Grid */}
         <div className={`grid grid-cols-1 sm:grid-cols-2 ${role === 'admin' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6 mb-8`}>
+          
+          {/* Total Tasks */}
           <StatsCard 
-            title="Total Tickets" 
+            title="Total Tasks" 
             value={stats.totalTasks} 
-            color="from-blue-400 to-blue-600"
-            icon={taskIcon}
-            alt="Task Icon"
+            icon={<FiActivity size={24} />}
+            color="bg-indigo-100 text-indigo-600"
           />
+          
+          {/* Completed Tasks */}
           <StatsCard 
-            title="Completed Tickets" 
+            title="Completed" 
             value={stats.completedTasks} 
-            color="from-green-400 to-green-600"
-            icon={completedTaskIcon}
-            alt="Completed Task Icon"
+            icon={<FiCheckCircle size={24} />}
+            color="bg-green-100 text-green-600"
           />
+          
+          {/* Pending Tasks */}
           <StatsCard 
-            title="Pending Tickets" 
+            title="Pending" 
             value={stats.pendingTasks} 
-            color="from-orange-400 to-orange-600"
-            icon={pendingTaskIcon}
-            alt="Pending Task Icon"
+            icon={<FiClock size={24} />}
+            color="bg-orange-100 text-orange-600"
           />
+          
+          {/* Performance */}
           <StatsCard 
             title="Performance" 
             value={`${stats.performance}%`} 
-            color="from-indigo-400 to-indigo-600"
-            icon={performanceIcon}
-            alt="Performance Icon"
+            icon={<FiTrendingUp size={24} />}
+            color="bg-blue-100 text-blue-600"
           />
+          
+          {/* Total Users (Admin Only) */}
           {role === 'admin' && (
             <StatsCard 
               title="Total Users" 
               value={stats.totalUsers || 0} 
-              color="from-purple-400 to-purple-600"
-              icon={userIcon}
-              alt="User Icon"
+              icon={<FiUsers size={24} />}
+              color="bg-purple-100 text-purple-600"
             />
           )}
         </div>
 
-        {/* Performance Progress */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 transform transition-all duration-300 hover:shadow-2xl">
-          <h3 className="text-xl font-semibold text-gray-700 mb-4">Performance Progress</h3>
-          <div className="relative">
-            <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
-              <div
-                className="h-6 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-1000 ease-out"
-                style={{ width: `${stats.performance}%` }}
-              ></div>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-sm font-semibold text-gray-700">{stats.performance}%</span>
-            </div>
+        {/* Performance Progress Card */}
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-slate-800">Overall Performance</h3>
+            <span className="text-3xl font-bold text-blue-600">{stats.performance}%</span>
           </div>
+          <div className="relative h-4 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-1000 ease-out"
+              style={{ width: `${stats.performance}%` }}
+            ></div>
+          </div>
+          <p className="text-xs text-slate-500 mt-2 text-right">Based on completed tasks and deadlines</p>
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          {/* Task Distribution Chart */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 transform transition-all duration-300 hover:shadow-2xl">
-            <h3 className="text-xl font-semibold text-gray-700 mb-4">Ticket Distribution</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          
+          {/* Task Distribution */}
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-6">Ticket Distribution</h3>
             <TaskDistributionChart 
               completed={stats.completedTasks} 
               pending={stats.pendingTasks} 
@@ -183,117 +211,115 @@ const Dashboard = () => {
             />
           </div>
 
-          {/* Weekly Performance Chart */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 transform transition-all duration-300 hover:shadow-2xl">
-            <h3 className="text-xl font-semibold text-gray-700 mb-4">Weekly Performance</h3>
+          {/* Weekly Performance */}
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-6">Weekly Progress</h3>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="name" tick={{ fill: '#6b7280' }} />
-                <YAxis tick={{ fill: '#6b7280' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'white', 
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid #e2e8f0',
                     borderRadius: '8px',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                    color: '#334155'
                   }}
                 />
                 <Legend />
-                <Bar dataKey="Performance" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Performance" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Recent Activities */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 transform transition-all duration-300 hover:shadow-2xl">
-          <h3 className="text-xl font-semibold text-gray-700 mb-4">Recent Activities</h3>
-          <div className="space-y-3">
-            {stats.activities?.length > 0 ? (
-              stats.activities.map((item, index) => (
-                <div 
-                  key={item.id} 
-                  className="flex justify-between items-center bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg hover:from-blue-100 hover:to-blue-200 transition-all duration-300"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span className="text-gray-700">{item.activity}</span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Recent Activities */}
+          <div className="lg:col-span-2 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-4">Recent Activities</h3>
+            <div className="space-y-3">
+              {stats.activities && stats.activities.length > 0 ? (
+                stats.activities.map((item, index) => (
+                  <div 
+                    key={item.id || index} 
+                    className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100 hover:bg-blue-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      <span className="text-sm text-slate-700 font-medium">{item.activity}</span>
+                    </div>
+                    <span className="text-xs text-slate-400 font-mono">{item.time}</span>
                   </div>
-                  <span className="text-sm text-gray-500">{item.time}</span>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                  <FiActivity size={32} className="mb-2 text-slate-200" />
+                  <p className="text-sm">No recent activity found.</p>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8">
-                <div className="text-gray-400 mb-2">
-                  <User className="w-12 h-12 mx-auto" />
-                </div>
-                <p className="text-gray-500 italic">No recent activity available</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Role Panel */}
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 text-white transform transition-all duration-300 hover:shadow-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-2xl font-bold">{role.charAt(0).toUpperCase() + role.slice(1)} Panel</h3>
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              <User className="w-6 h-6" />
+              )}
             </div>
           </div>
-          <p className="text-blue-100 mb-4">
-            {role === 'admin' && "Manage users, roles, and system settings."}
-            {role === 'employee' && "View your tasks, projects, and profile information."}
-            {role === 'hr' && "Manage employee data, leave requests, and payroll."}
-            {role === 'manager' && "View team progress, assign tasks, and track performance."}
-          </p>
-          <div className="flex space-x-3">
-            <button className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-all duration-300">
-              View Details
-            </button>
-            <button className="bg-transparent border border-white/30 hover:bg-white/10 text-white px-4 py-2 rounded-lg transition-all duration-300">
-              Settings
-            </button>
+
+          {/* Role / Quick Actions Panel */}
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 flex flex-col justify-between">
+            <div>
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mb-4">
+                <FiSettings size={20} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-1">{role.charAt(0).toUpperCase() + role.slice(1)} Panel</h3>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                {role === 'admin' && "System administration, user management, and global settings."}
+                {role === 'employee' && "View your assigned tasks, track progress, and manage files."}
+                {role === 'hr' && "Manage employee records, attendance, and leave requests."}
+                {role === 'manager' && "Oversee team performance, assign tasks, and review workflows."}
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <button 
+                onClick={() => navigate(role === 'admin' ? '/employees' : role === 'hr' ? '/employees' : '/tasks')}
+                className="w-full flex items-center justify-between px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium text-sm"
+              >
+                <span>Manage {role === 'admin' ? 'Users' : role === 'hr' ? 'Employees' : 'Tasks'}</span>
+                <FiArrowRight size={16} />
+              </button>
+              <button 
+                onClick={() => navigate('/profile')}
+                className="w-full flex items-center justify-between px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition font-medium text-sm"
+              >
+                <span>My Profile</span>
+                <FiUser size={16} />
+              </button>
+            </div>
           </div>
         </div>
+
       </div>
 
+      <Toast 
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.show}
+        onClose={() => setToast({ ...toast, show: false })}
+      />
+      
       <Footer />
     </div>
   );
 };
 
-const StatsCard = ({ title, value, color, icon, alt }) => {
-  const [imgError, setImgError] = useState(false);
-
-  const handleImageError = () => {
-    setImgError(true);
-  };
-
+// --- STATS CARD COMPONENT ---
+const StatsCard = ({ title, value, icon, color }) => {
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl border border-gray-100">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-600">{title}</h3>
-        {!imgError ? (
-          <img 
-            src={icon} 
-            alt={alt} 
-            className="w-10 h-10" 
-            onError={handleImageError}
-          />
-        ) : (
-          <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-        )}
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[140px]">
+      <div className={`w-12 h-12 rounded-full ${color.split(' ')[0]} flex items-center justify-center ${color.split(' ')[1]} shrink-0`}>
+        {icon}
       </div>
-      <div className="flex items-end justify-between">
-        <p className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
-          {value}
-        </p>
+      <div className="flex flex-col justify-center">
+        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">{title}</p>
+        <p className="text-2xl font-bold text-slate-800">{value}</p>
       </div>
     </div>
   );

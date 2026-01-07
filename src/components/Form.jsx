@@ -67,7 +67,7 @@ const Form = () => {
             onChange={handleChange}
             required
           />
-          <label>Joining Date</label>
+          <label>Date of Joining</label>
         </div>
 
         <div className="input-container">

@@ -115,7 +115,7 @@ const EditProfileModal = ({ isOpen, onClose, emp, onSave }) => {
           </div>
         </div>
 
-        {/* DOB + JOINING DATE */}
+        {/* DOB + Date of Joining */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="font-semibold">Date of Birth</label>
@@ -128,7 +128,7 @@ const EditProfileModal = ({ isOpen, onClose, emp, onSave }) => {
             />
           </div>
           <div>
-            <label className="font-semibold">Joining Date</label>
+            <label className="font-semibold">Date of Joining</label>
             <input 
               type="date" 
               name="joining_date" 
@@ -325,7 +325,7 @@ export default EditProfileModal;
 //           </div>
 //         </div>
 
-//         {/* DOB + JOINING DATE */}
+//         {/* DOB + Date of Joining */}
 //         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 //           <div>
 //             <label className="font-semibold">Date of Birth</label>
@@ -338,7 +338,7 @@ export default EditProfileModal;
 //             />
 //           </div>
 //           <div>
-//             <label className="font-semibold">Joining Date</label>
+//             <label className="font-semibold">Date of Joining</label>
 //             <input 
 //               type="date" 
 //               name="joining_date" 

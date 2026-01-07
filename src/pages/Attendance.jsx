@@ -1,70 +1,169 @@
-// src/pages/Attendance.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom"; // <-- NEW: Import useNavigate for redirection
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
-import { FiSearch, FiCalendar } from "react-icons/fi";
-import { useAuth } from '../context/AuthContext'; // Import the hook
+import {
+  FiSearch, FiCalendar, FiClock, FiUser, FiCheckCircle,
+  FiXCircle, FiLogIn, FiLogOut, FiEdit2, FiTrash2, FiDownload,
+  FiMoreVertical, FiX, FiFilter, FiActivity, FiBriefcase, FiShield, FiUsers
+} from "react-icons/fi";
+import { useAuth } from '../context/AuthContext';
 
+// --- AESTHETIC THEME PALETTE ---
 const statusColors = {
-  Present: "bg-green-500",
-  Absent: "bg-red-500",
-  Leave: "bg-yellow-500",
+  Present: { bg: "bg-green-100", text: "text-green-700", border: "border-green-200", dot: "bg-green-500" },
+  Absent: { bg: "bg-red-100", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
+  Leave: { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", dot: "bg-yellow-500" },
+  Late: { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-500" },
 };
 
-const Attendance = () => {
-  const navigate = useNavigate(); // <-- NEW: Initialize the navigate function
+const API_URL = "https://emsbackend-2w9c.onrender.com/api/attendance";
+const USERS_API = "https://emsbackend-2w9c.onrender.com/api/users";
+const LEAVES_API = "https://emsbackend-2w9c.onrender.com/api/leaves";
 
-  // Get all auth state and functions from the context
-  const { 
-    user, 
-    isLoggedIn, 
-    loginTime, 
-    attendanceRecord, 
-    logoutTime, 
-    setIsLoggedIn, 
-    setAttendanceRecord, 
-    setLoginTime, 
+const Attendance = () => {
+  const navigate = useNavigate();
+
+  const {
+    user,
+    isLoggedIn,
+    loginTime,
+    attendanceRecord,
+    logoutTime,
+    setIsLoggedIn,
+    setAttendanceRecord,
+    setLoginTime,
     setLogoutTime,
-    clearAuthState 
+    clearAuthState
   } = useAuth();
 
   const [records, setRecords] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [leaves, setLeaves] = useState([]);
+  const [displayData, setDisplayData] = useState([]);
   const [search, setSearch] = useState("");
-  const [date, setDate] = useState("");
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmType, setConfirmType] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }));
+
+  // View & Modals
+  const [viewMode, setViewMode] = useState('list');
+  const [dropdownOpen, setDropdownOpen] = useState(null);
+
+  const [showPunchInModal, setShowPunchInModal] = useState(false);
+  const [showPunchOutModal, setShowPunchOutModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // CRUD States
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [recordToDelete, setRecordToDelete] = useState(null);
   const [currentTimer, setCurrentTimer] = useState({ hours: 0, minutes: 0, seconds: 0 });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-  
-  const currentDate = new Date().toISOString().split('T')[0];
-  const currentTime = new Date().toLocaleTimeString('en-US', { 
-    hour12: true, 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit' 
-  });
-  
+  const [modalDateTime, setModalDateTime] = useState({ date: '', time: '' });
+
+  const activityTimeoutRef = useRef(null);
+
+  // --- Helper: Get Auth Headers ---
+  const getAuthHeader = () => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  // --- Helper: Get Current IST Time ---
+  const getISTDateTime = () => {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const timeStr = now.toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour12: true,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    return { date: dateStr, time: timeStr };
+  };
+
+  // --- Helper: Parse Time String to Date Object (24h) ---
+  const parseTime = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return new Date(2000, 0, 1, 0, 0, 0);
+    const [time, period] = timeStr.split(' ');
+    if (!time || !period) return new Date(2000, 0, 1, 0, 0, 0);
+    const [hours, minutes, seconds] = time.split(':').map(Number);
+    let hour24 = hours;
+    if (period === 'PM' && hours !== 12) hour24 += 12;
+    if (period === 'AM' && hours === 12) hour24 = 0;
+    return new Date(2000, 0, 1, hour24, minutes, seconds || 0);
+  };
+
+  // --- Helper: Check if Late (12:30 PM to 16:00 PM) ---
+  const isLate = (timeStr) => {
+    if (!timeStr) return false;
+    const punch = parseTime(timeStr);
+
+    // Late Window: 12:30:00 to 16:00:00
+    const lateStart = new Date(2000, 0, 1, 12, 30, 0); // 12:30 PM
+    const lateEnd = new Date(2000, 0, 1, 16, 0, 0);   // 04:00 PM (Next day) / 16:00 (24h)
+
+    return punch >= lateStart && punch < lateEnd;
+  };
+
+  // --- Helper: Check if Absent (16:00 PM to 23:59) ---
+  const isAbsent = (timeStr) => {
+    if (!timeStr) return false;
+    const punch = parseTime(timeStr);
+
+    // Absent Window: 16:00:00 to 23:59:59
+    // 04:00 PM (Next day) / 16:00 (24h) start
+    const absentStart = new Date(2000, 0, 1, 16, 0, 0);
+
+    return punch >= absentStart;
+  };
+
+  // --- Helper: Session Timer (Heartbeat) ---
+  const resetSessionTimer = () => {
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const newExpiry = Date.now() + TEN_MINUTES_MS;
+    localStorage.setItem('tokenExpiry', newExpiry.toString());
+  };
+
+  const handleSessionExpired = () => {
+    setIsLoggedIn(false);
+    setAttendanceRecord(null);
+    setLoginTime(null);
+    clearAuthState();
+    setToast({ show: true, message: 'Session Expired. Please login again.', type: 'error' });
+    localStorage.removeItem('tokenExpiry');
+    localStorage.removeItem('token');
+    setTimeout(() => navigate('/'), 2000);
+  };
+
+  // --- Effects ---
+  useEffect(() => {
+    if (!user) return;
+    const EXPIRY_KEY = 'tokenExpiry';
+    const checkInterval = setInterval(() => {
+      const now = Date.now();
+      const expiry = parseInt(localStorage.getItem(EXPIRY_KEY));
+      if (now > expiry) {
+        clearInterval(checkInterval);
+        handleSessionExpired();
+      }
+    }, 1000);
+
+    const handleActivity = () => resetSessionTimer();
+    const events = ['mousemove', 'keydown', 'click', 'scroll'];
+    events.forEach(evt => window.addEventListener(evt, handleActivity));
+
+    return () => {
+      clearInterval(checkInterval);
+      events.forEach(evt => window.removeEventListener(evt, handleActivity));
+    };
+  }, [user]);
+
+  // Helper Functions
   const calculateWorkingHours = (loginTime, logoutTime) => {
     if (!loginTime || !logoutTime) return { hours: 0, minutes: 0, seconds: 0 };
-    
-    const parseTime = (timeStr) => {
-      if (!timeStr || typeof timeStr !== 'string') return new Date(2000, 0, 1, 0, 0, 0);
-      const [time, period] = timeStr.split(' ');
-      if (!time || !period) return new Date(2000, 0, 1, 0, 0, 0);
-      const [hours, minutes, seconds] = time.split(':').map(Number);
-      if (isNaN(hours) || isNaN(minutes)) return new Date(2000, 0, 1, 0, 0, 0);
-      let hour24 = hours;
-      if (period === 'PM' && hours !== 12) hour24 += 12;
-      if (period === 'AM' && hours === 12) hour24 = 0;
-      return new Date(2000, 0, 1, hour24, minutes, seconds || 0);
-    };
-    
     const login = parseTime(loginTime);
     const logout = parseTime(logoutTime);
     const diffMs = logout - login;
@@ -72,10 +171,9 @@ const Attendance = () => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-    
     return { hours, minutes, seconds };
   };
-  
+
   const formatTimer = (timer) => {
     if (!timer) return '0s';
     const parts = [];
@@ -84,252 +182,485 @@ const Attendance = () => {
     parts.push(`${timer.seconds}s`);
     return parts.join(' ');
   };
-  
-  const fetchRecords = async () => {
+
+  const exportToCSV = () => {
+    if (displayData.length === 0) {
+      setToast({ show: true, message: 'No data to export', type: 'error' });
+      return;
+    }
+    const headers = ["Employee ID", "Name", "Date", "Punch In", "Punch Out", "Working Hours", "Status"];
+    const csvRows = [headers.join(',')];
+    displayData.forEach(row => {
+      const values = [
+        `"${row.employeeId}"`, `"${row.name || ''}"`, `"${row.date}"`,
+        `"${row.punch_in || ''}"`, `"${row.punch_out || ''}"`, `"${row.workingHours || ''}"`, `"${row.status}"`
+      ];
+      csvRows.push(values.join(','));
+    });
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('hidden', ''); a.setAttribute('href', url);
+    a.setAttribute('download', `attendance_report_${getISTDateTime().date}.csv`);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setToast({ show: true, message: 'CSV downloaded', type: 'success' });
+  };
+
+  // --- Fetch Functions ---
+  const fetchUsers = async () => {
+    if (!user) return;
     try {
-      const res = await axios.get("http://localhost:5000/api/attendance");
-      setRecords(res.data.records || res.data);
+      const res = await axios.get(USERS_API, { headers: getAuthHeader() });
+      setUsers(res.data || []);
     } catch (err) {
-      console.error("Error fetching records:", err);
-      setToast({ show: true, message: "Failed to fetch attendance records", type: "error" });
+      console.error("Error fetching users:", err);
     }
   };
-  
-  useEffect(() => {
-    fetchRecords();
-  }, []);
-  
+
+  const fetchLeaves = async () => {
+    if (!user) return;
+    try {
+      const res = await axios.get(LEAVES_API, { headers: getAuthHeader() });
+      setLeaves(res.data || []);
+    } catch (err) {
+      console.error("Error fetching leaves:", err);
+      setLeaves([]);
+    }
+  };
+
+  const fetchRecords = async () => {
+    try {
+      if (!user) return;
+      let res;
+      if (user.role === 'employee' || user.role === 'manager') {
+        res = await axios.get(`${API_URL}/employee/${user.employeeId}`, { headers: getAuthHeader() });
+        setRecords(res.data);
+        checkActiveSession(res.data);
+      } else if (user.role === 'admin' || user.role === 'hr') {
+        res = await axios.get(API_URL, { headers: getAuthHeader() });
+        const allRecords = res.data.records || res.data;
+        setRecords(allRecords);
+        fetchUsers();
+        fetchLeaves();
+        const userRecords = allRecords.filter(r => r.employeeId === user.employeeId);
+        checkActiveSession(userRecords);
+      }
+    } catch (err) {
+      console.error("Error fetching records:", err);
+      setToast({ show: true, message: "Failed to fetch records", type: "error" });
+    }
+  };
+
+  const checkActiveSession = (userRecords) => {
+    if (!userRecords) return;
+    const istDate = getISTDateTime().date;
+    const todayRecord = userRecords.find(r => r.date === istDate && r.punch_in && !r.punch_out);
+    if (todayRecord) {
+      setIsLoggedIn(true);
+      setLoginTime(todayRecord.punch_in);
+      setAttendanceRecord({
+        empId: todayRecord.employeeId, empName: todayRecord.name,
+        loginTime: todayRecord.punch_in, date: todayRecord.date, _id: todayRecord._id
+      });
+      setLogoutTime(null);
+    }
+  };
+
+  useEffect(() => { if (user) fetchRecords(); }, [user]);
+
+  // Working Timer Logic
   useEffect(() => {
     let interval;
     if (isLoggedIn && loginTime) {
       interval = setInterval(() => {
-        const now = new Date().toLocaleTimeString('en-US', { 
-          hour12: true, 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit' 
-        });
-        setCurrentTimer(calculateWorkingHours(loginTime, now));
+        const nowIST = getISTDateTime().time;
+        setCurrentTimer(calculateWorkingHours(loginTime, nowIST));
       }, 1000);
     }
     return () => clearInterval(interval);
   }, [isLoggedIn, loginTime]);
 
+  // --- DATA MERGE LOGIC ---
   useEffect(() => {
-    let temp = [...records];
-    if (user && user.role !== 'admin' && user.role !== 'manager' && user.role !== 'hr') {
-      temp = temp.filter(r => r.employeeId === user.employeeId);
-    }
-    if (search.trim() !== "") {
-      temp = temp.filter((r) => r.name && r.name.toLowerCase().includes(search.toLowerCase()));
-    }
-    if (date.trim() !== "") {
-      temp = temp.filter((r) => r.date && r.date.startsWith(date));
-    }
-    setFiltered(temp);
-  }, [search, date, records, user]);
+    if (!user) return;
 
-  const handleLogin = async () => {
-    if (!user) {
-      setToast({ show: true, message: "User not found. Please login again.", type: "error" });
+    // 1. Employee View
+    if (user.role === 'employee' || user.role === 'manager') {
+      let temp = [...records];
+      if (search.trim() !== "") {
+        temp = temp.filter((r) => r?.name?.toLowerCase().includes(search.toLowerCase()));
+      }
+      if (selectedDate.trim() !== "") {
+        temp = temp.filter((r) => r.date && r.date.startsWith(selectedDate));
+      }
+
+      // Apply Shift Logic for Employee View
+      temp = temp.map(r => {
+        // Logic: If Punch In exists, check if Late or Absent, else Present.
+        if (r.punch_in) {
+          if (isLate(r.punch_in)) return { ...r, status: 'Late' };
+          if (isAbsent(r.punch_in)) return { ...r, status: 'Absent' };
+          return { ...r, status: 'Present' }; // 00:00 to 12:29
+        }
+        return r; // Keep Leave status or null status
+      });
+
+      setDisplayData(temp);
       return;
     }
-    
-    try {
-      const response = await axios.post("http://localhost:5000/api/attendance", {
-        employeeId: user.employeeId,
-        name: user.name,
-        date: currentDate,
-        punch_in: currentTime
-      });
-      
-      const record = {
-        empId: user.employeeId,
-        empName: user.name,
-        loginTime: currentTime,
-        date: currentDate,
-        _id: response.data._id
-      };
 
-      setIsLoggedIn(true);
-      setAttendanceRecord(record);
-      setLoginTime(currentTime);
-      
+    // 2. Admin/HR View
+    if (user.role === 'admin' || user.role === 'hr') {
+      const filteredUsers = users.filter(u =>
+        u?.name?.toLowerCase().includes(search.toLowerCase())
+      );
+
+      let mergedList = filteredUsers.map(u => {
+        const empId = u.employeeId || u._id;
+
+        // Check for Approved Leave
+        const onLeave = leaves.find(l => l.employeeId === empId && l.date === selectedDate);
+        if (onLeave) {
+          return {
+            _id: null, // <--- Fake Record, No ID
+            employeeId: empId,
+            name: u.name,
+            date: selectedDate,
+            status: 'Leave',
+            punch_in: null,
+            punch_out: null,
+            workingHours: null
+          };
+        }
+
+        const att = records.find(r => r.employeeId === empId && r.date === selectedDate);
+
+        if (att) {
+          // Apply Shift Logic
+          let newStatus = 'Present';
+          if (isLate(att.punch_in)) newStatus = 'Late';
+          else if (isAbsent(att.punch_in)) newStatus = 'Absent';
+
+          return { ...att, status: newStatus };
+        } else {
+          return {
+            _id: null, // <--- Fake Record, No ID
+            employeeId: empId,
+            name: u.name,
+            date: selectedDate,
+            status: 'Absent',
+            punch_in: null,
+            punch_out: null,
+            workingHours: null
+          };
+        }
+      });
+
+      // Sorting Priority: Present (1) < Late (2) < Leave (3) < Absent (4)
+      mergedList.sort((a, b) => {
+        const priority = { 'Present': 1, 'Late': 2, 'Leave': 3, 'Absent': 4 };
+        const pA = priority[a.status] || 4;
+        const pB = priority[b.status] || 4;
+        if (pA !== pB) return pA - pB;
+        return a.name.localeCompare(b.name);
+      });
+
+      setDisplayData(mergedList);
+    }
+  }, [search, selectedDate, records, users, user, leaves]);
+
+  // --- Handlers ---
+  const handlePunchIn = async () => {
+    if (!user) return;
+    const { date: currentDate, time: currentTime } = getISTDateTime();
+    try {
+      const response = await axios.post(API_URL, {
+        employeeId: user.employeeId, name: user.name, date: currentDate, punch_in: currentTime
+      }, { headers: getAuthHeader() });
+      setIsLoggedIn(true); setLoginTime(currentTime);
       setRecords(prev => [...prev, response.data]);
-      setShowConfirmModal(false);
-      setToast({ show: true, message: 'Login successful!', type: 'success' });
+      setShowPunchInModal(false);
+      setToast({ show: true, message: 'Punch In successful!', type: 'success' });
+      resetSessionTimer();
     } catch (error) {
-      console.error("Login error:", error);
-      setToast({ show: true, message: error.response?.data?.message || 'Login failed', type: 'error' });
+      setToast({ show: true, message: error.response?.data?.message || 'Punch In failed', type: "error" });
     }
   };
 
-  const handleLogout = async () => {
-    if (!user || !attendanceRecord) {
-      setToast({ show: true, message: "User or attendance record not found.", type: "error" });
-      return;
-    }
-    
+  const handlePunchOut = async () => {
+    if (!user || !attendanceRecord) return;
+    const sessionDate = attendanceRecord.date;
+    const currentTime = getISTDateTime().time;
     try {
       const workingHours = calculateWorkingHours(attendanceRecord.loginTime, currentTime);
-      const response = await axios.put("http://localhost:5000/api/attendance/logout", {
-        employeeId: user.employeeId,
-        date: currentDate,
-        punch_out: currentTime,
-        workingHours: formatTimer(workingHours)
-      });
-      
-      setLogoutTime(currentTime);
-      setIsLoggedIn(false);
-      clearAuthState();
-      
-      setRecords(prev => prev.map(r => r._id === attendanceRecord._id ? response.data : r));
-      setShowConfirmModal(false);
-      setToast({ show: true, message: 'Logout successful! Redirecting...', type: 'success' });
-
-      // <-- NEW: Add a delay before redirecting to show the toast message
-      setTimeout(() => {
-        navigate('/'); // Redirect to the login page
-      }, 1500); // 1.5 second delay
-
+      await axios.put(`${API_URL}/logout`, {
+        employeeId: user.employeeId, date: sessionDate,
+        punch_out: currentTime, workingHours: formatTimer(workingHours)
+      }, { headers: getAuthHeader() });
+      setLogoutTime(currentTime); setIsLoggedIn(false); setAttendanceRecord(null);
+      setRecords(prev => prev.map(r => r._id === attendanceRecord._id
+        ? { ...r, punch_out: currentTime, workingHours: formatTimer(workingHours) } : r
+      ));
+      setShowPunchOutModal(false);
+      setToast({ show: true, message: 'Punch Out successful!', type: 'success' });
+      resetSessionTimer();
     } catch (error) {
-      console.error("Logout error:", error);
-      setToast({ show: true, message: error.response?.data?.message || 'Logout failed', type: 'error' });
+      console.error(error);
+      setToast({ show: true, message: error.response?.data?.message || 'Punch Out failed', type: "error" });
     }
   };
 
-  const canViewAllRecords = user && (user.role === 'admin' || user.role === 'manager' || user.role === 'hr');
+  const handleUpdateRecord = async (e) => {
+    e.preventDefault();
+
+    // --- FIX: Prevent updating records with _id: null ---
+    if (!editingRecord._id) {
+      setToast({ show: true, message: 'Cannot update this record. Employee has not punched in yet.', type: 'error' });
+      setShowEditModal(false);
+      return;
+    }
+
+    try {
+      const { _id, ...dataToUpdate } = editingRecord;
+      const response = await axios.put(`${API_URL}/${_id}`, dataToUpdate, { headers: getAuthHeader() });
+      setRecords(prev => prev.map(r => r._id === _id ? response.data : r));
+      setShowEditModal(false);
+      setToast({ show: true, message: 'Record updated', type: 'success' });
+      resetSessionTimer();
+    } catch (error) {
+      setToast({ show: true, message: 'Failed to update', type: 'error' });
+    }
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!recordToDelete) return;
+    try {
+      await axios.delete(`${API_URL}/${recordToDelete._id}`, { headers: getAuthHeader() });
+      setRecords(prev => prev.filter(r => r._id !== recordToDelete._id));
+      setShowDeleteModal(false); setRecordToDelete(null);
+      setToast({ show: true, message: 'Record deleted', type: 'success' });
+      resetSessionTimer();
+    } catch (error) {
+      setToast({ show: true, message: 'Failed to delete', type: 'error' });
+    }
+  };
+
+  // Click Outside Dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownOpen) {
+        if (!event.target.closest('.dropdown-actions')) {
+          setDropdownOpen(null);
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownOpen]);
+
+  const canViewAllRecords = user && (user.role === 'admin' || user.role === 'hr');
+  const presentCount = displayData.filter(r => r.status === 'Present').length;
+  const absentCount = displayData.filter(r => r.status === 'Absent').length;
+  const leaveCount = displayData.filter(r => r.status === 'Leave').length;
+  const lateCount = displayData.filter(r => r.status === 'Late').length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-blue-100 flex flex-col">
+    <><div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
       <Navbar />
-      <div className="p-6 max-w-7xl mx-auto flex-1 w-full">
-        {/* Header with Login/Logout buttons */}
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 w-full">
-          <h1 className="text-4xl font-extrabold text-blue-700 flex-grow">
-            {canViewAllRecords ? "All Attendance Records" : "My Attendance"}
-          </h1>
-          <div className="flex gap-4">
-            <button
-              onClick={() => setShowLoginModal(true)}
-              disabled={isLoggedIn || !user}
-              className={`px-6 py-2 rounded-full shadow-md active:scale-95 transition ${
-                isLoggedIn || !user ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'
-              }`}
-            >
-              Login
-            </button>
-            <button
-              onClick={() => setShowLogoutModal(true)}
-              disabled={!isLoggedIn || !user}
-              className={`px-6 py-2 rounded-full shadow-md active:scale-95 transition ${
-                !isLoggedIn || !user ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white'
-              }`}
-            >
-              Logout
-            </button>
+      <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Attendance Directory</h1>
+            <p className="text-slate-500 text-sm mt-1">Manage daily punches, working hours, and leave status</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+            <div className="flex gap-2 w-full sm:w-auto bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+              <button
+                onClick={() => setShowPunchInModal(true)}
+                disabled={isLoggedIn || !user}
+                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg flex items-center justify-center gap-2 font-medium transition-all duration-300 ${isLoggedIn || !user ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                  }`}>
+                <FiLogIn size={18} /> Punch In
+              </button>
+              <button
+                onClick={() => setShowPunchOutModal(true)}
+                disabled={!isLoggedIn || !user}
+                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg flex items-center justify-center gap-2 font-medium transition-all duration-300 ${!isLoggedIn || !user ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                  }`}>
+                <FiLogOut size={18} /> Punch Out
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {canViewAllRecords && (
+            <>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0"><FiCheckCircle size={24} /></div>
+                <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Present</p><p className="text-2xl font-bold text-slate-800">{presentCount}</p></div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0"><FiXCircle size={24} /></div>
+                <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Absent</p><p className="text-2xl font-bold text-slate-800">{absentCount}</p></div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 shrink-0"><FiCalendar size={24} /></div>
+                <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">On Leave</p><p className="text-2xl font-bold text-slate-800">{leaveCount}</p></div>
+              </div>
+            </>
+          )}
+          {/* Late Card */}
+          {lateCount > 0 && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><FiClock size={24} /></div>
+              <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Late</p><p className="text-2xl font-bold text-slate-800">{lateCount}</p></div>
+            </div>
+          )}
+
+          {/* Live Timer Card */}
+          {isLoggedIn ? (
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-6 rounded-2xl shadow-lg shadow-indigo-200 border border-blue-500 flex items-center justify-between min-h-[120px] col-span-1 md:col-span-1 text-white relative overflow-hidden group">
+              <div className="absolute -right-4 -top-4 w-24 h-24 bg-white opacity-10 rounded-full group-hover:scale-110 transition-transform"></div>
+              <div className="flex flex-col justify-center z-10">
+                <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Live Session
+                </p>
+                <p className="text-4xl font-mono font-bold tracking-tighter">{formatTimer(currentTimer)}</p>
+                <p className="text-blue-200 text-xs mt-1 font-medium">Since {loginTime}</p>
+              </div>
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white z-10">
+                <FiClock size={28} />
+              </div>
+            </div>
+          ) : !canViewAllRecords && (
+            <div className="col-span-4"></div>
+          )}
+        </div>
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 w-full gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex gap-1 p-1">
+            <button onClick={() => setViewMode('list')} className={`px-5 py-2 rounded-xl font-medium transition-all duration-200 ${viewMode === 'list' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>List View</button>
+          </div>
+
+          <div className="flex gap-3 w-full sm:w-auto items-center pl-2 sm:pl-4 border-l border-slate-100">
+            <div className="relative flex-grow sm:flex-grow-0">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiCalendar className="text-slate-400" /></div>
+              <input type="date" className="pl-10 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-full text-sm" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+            </div>
+            {canViewAllRecords && (
+              <button onClick={exportToCSV} className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 hover:shadow-indigo-300 active:scale-95">
+                <FiDownload size={18} /> Export CSV
+              </button>
+            )}
           </div>
         </div>
 
-        {/* TIMER DISPLAY */}
-        {isLoggedIn && (
-          <div className="bg-white rounded-xl shadow-lg mb-8 p-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-700">Current Session</h3>
-                <p className="text-sm text-gray-500">Started at: {loginTime}</p>
-              </div>
-              <div className="text-3xl font-bold text-blue-600">
-                {formatTimer(currentTimer)}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* FILTERS SECTION (Only for admin, manager, and HR) */}
         {canViewAllRecords && (
-          <div className="flex flex-col sm:flex-row justify-center gap-4 mb-8">
-            <div className="relative w-full sm:w-2/5 max-w-md">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiSearch className="text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search employee..."
-                className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="relative w-full sm:w-1/4 max-w-xs">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiCalendar className="text-gray-400" />
-              </div>
-              <input
-                type="date"
-                className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
+          <div className="relative mb-6">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><FiFilter className="text-slate-400" /></div>
+            <input type="text" placeholder="Search employee..." className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         )}
-
-        {/* ATTENDANCE TABLE */}
-        {attendanceRecord && (
-          <div className="bg-white rounded-xl shadow-lg mb-8 overflow-hidden">
-            <div className="bg-blue-600 text-white p-4">
-              <h3 className="text-lg font-semibold">
-                {canViewAllRecords ? "Today's Attendance" : "My Today's Attendance"}
-              </h3>
-            </div>
+        {viewMode === 'list' && (
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Login Time</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Logout Time</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Working Period</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timer</th>
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4">Employee</th>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4">Punch In</th>
+                    <th className="px-6 py-4">Punch Out</th>
+                    <th className="px-6 py-4">Duration</th>
+                    <th className="px-6 py-4">Status</th>
+                    {canViewAllRecords && <th className="px-6 py-4 text-right">Actions</th>}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  <tr>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{attendanceRecord.empId}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{attendanceRecord.empName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{attendanceRecord.loginTime}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{logoutTime || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {logoutTime ? formatTimer(calculateWorkingHours(attendanceRecord.loginTime, logoutTime)) : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {isLoggedIn ? <span className="text-green-600 font-bold text-lg">{formatTimer(currentTimer)}</span> : '-'}
-                    </td>
-                  </tr>
+                <tbody className="divide-y divide-slate-100">
+                  {displayData.length === 0 ? (
+                    <tr><td colSpan={canViewAllRecords ? 7 : 6} className="p-12 text-center text-slate-400">No records found for this date.</td></tr>
+                  ) : displayData.map((rec) => (
+                    <tr key={rec.employeeId + rec.date} className={`hover:bg-blue-50/30 transition duration-200 group ${rec.status === 'Absent' ? 'bg-red-50/20' : ''}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0 border border-slate-200">
+                            {rec.name?.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col justify-center">
+                            <span className="font-bold text-slate-800 text-sm">{rec.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">{rec.employeeId}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 font-medium">{rec.date}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 font-mono">{rec.punch_in || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 font-mono">{rec.punch_out || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-800 font-semibold">{rec.workingHours || '-'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border flex items-center gap-1.5 w-max ${statusColors[rec.status] ? `${statusColors[rec.status].bg} ${statusColors[rec.status].text} ${statusColors[rec.status].border}` : "bg-gray-100 text-gray-600"}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${statusColors[rec.status]?.dot || "bg-gray-400"}`}></span>
+                          {rec.status}
+                        </span>
+                      </td>
+                      {canViewAllRecords && (
+                        <td className="px-6 py-4 text-right relative dropdown-actions">
+                          <div className="inline-block relative">
+                            <button
+                              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDropdownOpen(dropdownOpen === rec.employeeId + rec.date ? null : rec.employeeId + rec.date);
+                              }}
+                            >
+                              <FiMoreVertical className="text-xl" />
+                            </button>
+                            <div
+                              className={`absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-2xl border border-slate-100 z-20 overflow-hidden transition-all duration-200 origin-top-right ${dropdownOpen === rec.employeeId + rec.date ? "opacity-100 scale-100 visible" : "opacity-0 scale-95 invisible"
+                                }`}
+                            >
+                              <button
+                                className="block w-full text-left px-4 py-3 text-sm font-medium text-slate-700 hover:bg-blue-50 flex items-center gap-2 hover:text-blue-600 transition-colors"
+                                // --- FIX: Only allow Edit if record exists (has ID) ---
+                                onClick={() => {
+                                  if (!rec._id) {
+                                    setToast({ show: true, message: 'Cannot edit absent record (No punch-in)', type: 'error' });
+                                    return;
+                                  }
+                                  setEditingRecord(rec);
+                                  setShowEditModal(true);
+                                  setDropdownOpen(null);
+                                }}
+                              >
+                                <FiEdit2 size={14} /> Edit
+                              </button>
+                              <div className="border-t border-slate-100">
+                                <button
+                                  // --- FIX: Only allow Delete if record exists (has ID) ---
+                                  onClick={() => {
+                                    if (!rec._id) {
+                                      setToast({ show: true, message: 'Cannot delete absent record (No punch-in)', type: 'error' });
+                                      return;
+                                    }
+                                    setRecordToDelete(rec);
+                                    setShowDeleteModal(true);
+                                    setDropdownOpen(null);
+                                  }}
+                                  className="block w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                                >
+                                  <FiTrash2 size={14} /> Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-
-        {!filtered || filtered.length === 0 ? (
-          <div className="text-center text-gray-600 text-xl mt-10">
-            {canViewAllRecords ? "No attendance records found." : "You don't have any attendance records yet."}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filtered.map((rec, i) => (
-              <div key={rec._id} className="bg-white p-6 rounded-3xl shadow-md border border-blue-200 hover:scale-105 transition-all opacity-0 animate-fadeIn" style={{ animationDelay: `${i * 0.1}s`, animationFillMode: "forwards" }}>
-                <h2 className="text-2xl font-bold text-blue-700">{rec.name}</h2>
-                <p className="text-gray-500 mt-1">Date: {rec.date}</p>
-                <p className="text-gray-500">Punch In: {rec.punch_in}</p>
-                <p className="text-gray-500">Punch Out: {rec.punch_out}</p>
-                <p className="text-gray-500">Working Hours: {rec.workingHours || '-'}</p>
-                <span className={`px-4 py-1 mt-3 inline-block text-white rounded-full ${statusColors[rec.status] || "bg-gray-500"}`}>{rec.status}</span>
-              </div>
-            ))}
           </div>
         )}
       </div>
@@ -337,73 +668,102 @@ const Attendance = () => {
       <Toast message={toast.message} type={toast.type} isVisible={toast.show} onClose={() => setToast({ ...toast, show: false })} />
       <Footer />
 
-      {/* MODALS */}
-      {showLoginModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-6 text-green-600 text-center">Login Attendance</h2>
-            <div className="space-y-4">
-              <div><label className="font-semibold text-gray-700">Employee ID</label><input type="text" value={user?.employeeId || ''} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Employee Name</label><input type="text" value={user?.name || ''} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Date</label><input type="text" value={currentDate} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Current Time</label><input type="text" value={currentTime} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
+      {/* --- PUNCH IN MODAL --- */}
+      {showPunchInModal && (
+        <div className="fixed inset-0 z-[50] flex items-center justify-center backdrop-blur-xl p-4" style={{ background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.75) 50%, rgba(15, 23, 42, 0.95) 100%)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-green-600 mx-auto mb-4">
+              <FiLogIn size={32} />
             </div>
-            <div className="flex gap-4 mt-6">
-              <button onClick={() => setShowLoginModal(false)} className="flex-1 bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
-              <button onClick={() => { setConfirmType('login'); setShowLoginModal(false); setShowConfirmModal(true); }} className="flex-1 bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition">Save</button>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Start Session?</h2>
+            <p className="text-slate-500 mb-6">Start tracking time for <span className="font-bold text-slate-700">{user?.name}</span>.</p>
+            <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100 text-left">
+              <div className="flex justify-between mb-2"><span className="text-xs text-slate-400 uppercase font-semibold">Date</span> <span className="font-mono text-sm text-slate-700">{getISTDateTime().date}</span></div>
+              <div className="flex justify-between"><span className="text-xs text-slate-400 uppercase font-semibold">Time</span> <span className="font-mono text-sm text-slate-700">{getISTDateTime().time}</span></div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {showLogoutModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-6 text-red-600 text-center">Logout Attendance</h2>
-            <div className="space-y-4">
-              <div><label className="font-semibold text-gray-700">Employee ID</label><input type="text" value={user?.employeeId || ''} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Employee Name</label><input type="text" value={user?.name || ''} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Date</label><input type="text" value={currentDate} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Login Time</label><input type="text" value={loginTime || 'N/A'} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Logout Time</label><input type="text" value={currentTime} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-              <div><label className="font-semibold text-gray-700">Total Time Worked</label><input type="text" value={loginTime ? formatTimer(calculateWorkingHours(loginTime, currentTime)) : '0s'} readOnly className="w-full p-3 bg-gray-200 rounded-xl" /></div>
-            </div>
-            <div className="flex gap-4 mt-6">
-              <button onClick={() => setShowLogoutModal(false)} className="flex-1 bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
-              <button onClick={() => { setConfirmType('logout'); setShowLogoutModal(false); setShowConfirmModal(true); }} className="flex-1 bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition">Confirm</button>
+            <div className="flex gap-3">
+              <button onClick={() => setShowPunchInModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition">Cancel</button>
+              <button onClick={handlePunchIn} className="flex-1 px-4 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition shadow-lg shadow-green-200">Confirm</button>
             </div>
           </div>
         </div>
       )}
 
-      {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md">
-            {confirmType === 'login' ? (
-              <>
-                <h2 className="text-2xl font-bold mb-6 text-green-600 text-center">Confirm Your Attendance</h2>
-                <p className="text-center text-gray-700 mb-6">Are you sure you want to mark your login attendance?</p>
-                <div className="flex gap-4">
-                  <button onClick={() => setShowConfirmModal(false)} className="flex-1 bg-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-400 transition">Cancel</button>
-                  <button onClick={handleLogin} className="flex-1 bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition">Confirm</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-2xl font-bold mb-6 text-red-600 text-center">Logout Summary</h2>
-                <div className="space-y-3 mb-6">
-                  <div className="flex justify-between"><span className="font-semibold">Login Time:</span><span>{loginTime}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Logout Time:</span><span>{currentTime}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Working Hours:</span><span>{loginTime ? formatTimer(calculateWorkingHours(loginTime, currentTime)) : '0s'}</span></div>
-                </div>
-                <button onClick={handleLogout} className="w-full bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition">Confirm Logout</button>
-              </>
-            )}
+      {/* --- PUNCH OUT MODAL --- */}
+      {showPunchOutModal && (
+        <div className="fixed inset-0 z-[50] flex items-center justify-center backdrop-blur-xl p-4" style={{ background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.75) 50%, rgba(15, 23, 42, 0.95) 100%)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center text-red-600 mx-auto mb-4">
+              <FiLogOut size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">End Session?</h2>
+            <p className="text-slate-500 mb-4">Stop tracking time.</p>
+            <div className="text-4xl font-mono font-bold text-slate-800 mb-6 bg-slate-50 py-3 rounded-xl border border-slate-100">{formatTimer(currentTimer)}</div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowPunchOutModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition">Cancel</button>
+              <button onClick={handlePunchOut} className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition shadow-lg shadow-red-200">Confirm</button>
+            </div>
           </div>
         </div>
       )}
-    </div>
-  );
-};
 
+      {/* --- EDIT MODAL --- */}
+      {showEditModal && editingRecord && (
+        <div className="fixed inset-0 z-[50] flex items-center justify-center backdrop-blur-xl p-4" style={{ background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.75) 50%, rgba(15, 23, 42, 0.95) 100%)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><FiEdit2 className="text-blue-600" /> Edit Record</h2>
+            <form onSubmit={handleUpdateRecord} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <select value={editingRecord.status} onChange={(e) => setEditingRecord({ ...editingRecord, status: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:outline-none">
+                  <option value="Present">Present</option>
+                  <option value="Late">Late</option>
+                  <option value="Absent">Absent</option>
+                  <option value="Leave">Leave</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Punch In</label>
+                <input type="text" value={editingRecord.punch_in || ''} onChange={(e) => setEditingRecord({ ...editingRecord, punch_in: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:outline-none" placeholder="e.g. 09:00:00 AM" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Punch Out</label>
+                <input type="text" value={editingRecord.punch_out || ''} onChange={(e) => setEditingRecord({ ...editingRecord, punch_out: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:outline-none" placeholder="e.g. 05:00:00 PM" />
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition">Cancel</button>
+                <button type="submit" className="flex-1 px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition shadow-lg shadow-blue-200">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE MODAL --- */}
+      {showDeleteModal && recordToDelete && (
+        <div className="fixed inset-0 z-[50] flex items-center justify-center backdrop-blur-xl p-4" style={{ background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.75) 50%, rgba(15, 23, 42, 0.95) 100%)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
+            <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Delete Record?</h2>
+            <p className="text-slate-500 mb-6 text-sm">Are you sure you want to delete this record for <strong>{recordToDelete.name}</strong>?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition">Cancel</button>
+              <button onClick={handleDeleteRecord} className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition shadow-lg shadow-red-200">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+      `}</style>
+
+    <div />
+  </div></>
+    
+  )};
 export default Attendance;

@@ -1,234 +1,151 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
-import EditProfileModal from "./EditProfileModal";
-import ChangePasswordModal from "./ChangePasswordModal";
+import {
+  FiUser, FiMail, FiPhone, FiMapPin, FiCalendar, 
+  FiBriefcase, FiLayers
+} from "react-icons/fi";
 
 const ProfilePage = () => {
   const [user, setUser] = useState({});
-  const [openProfileModal, setOpenProfileModal] = useState(false);
-  const [openPasswordModal, setOpenPasswordModal] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
     if (userData) setUser(JSON.parse(userData));
   }, []);
 
-  // Save updated profile data
-  const handleProfileSave = (updatedData) => {
-    const newUser = { ...user, ...updatedData };
-    setUser(newUser);
-    localStorage.setItem("user", JSON.stringify(newUser));
+  // Reusable Detail Field Component
+  const DetailField = ({ label, value, icon }) => {
+    return (
+      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+        <div className="flex items-center gap-3 text-slate-400 mb-1">
+          {icon}
+          <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+        </div>
+        <div className="text-slate-800 font-medium">{value}</div>
+      </div>
+    );
   };
 
-  // Handle password change
-  const handlePasswordSave = (passwordData) => {
-    console.log("Password updated:", passwordData);
-    // Optional: call API here
-  };
+  if (!user || Object.keys(user).length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
-      {/* Navbar */}
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
       <Navbar />
 
-      {/* Modals */}
-      <EditProfileModal
-        isOpen={openProfileModal}
-        onClose={() => setOpenProfileModal(false)}
-        emp={user}
-        onSave={handleProfileSave}
-      />
-      <ChangePasswordModal
-        isOpen={openPasswordModal}
-        onClose={() => setOpenPasswordModal(false)}
-        onSave={handlePasswordSave}
-        user={user}
-      />
-
-      {/* Profile Content */}
-      <main className="flex-1 flex justify-center items-start py-16 px-4">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden">
+      <div className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full">
+        
+        {/* Profile Card */}
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 md:p-10">
+          
           {/* Header */}
-          <div className="bg-gradient-to-r from-sky-400 to-sky-300 h-40 relative">
-            <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 w-32 h-32 rounded-full border-4 border-white overflow-hidden shadow-lg">
+          <div className="flex flex-col items-center justify-between mb-8 border-b border-slate-100 pb-6">
+            <div className="flex flex-col items-center">
+                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">My Profile</h1>
+                <span className="bg-blue-100 text-blue-700 text-[10px] font-bold uppercase px-3 py-1 rounded-full border border-blue-200 mt-1">
+                  {user.role || "Employee"}
+                </span>
+            </div>
+          </div>
+
+          {/* Avatar Section */}
+          <div className="flex flex-col items-center mb-10">
+            <div className="w-32 h-32 rounded-full bg-blue-50 border-4 border-white shadow-xl flex items-center justify-center overflow-hidden relative group hover:scale-105 transition-transform duration-300">
               {user.profileImage ? (
                 <img
-                  src={`http://localhost:5000/${user.profileImage}`}
+                  src={`https://emsbackend-2w9c.onrender.com${user.profileImage}`}
                   alt="Profile"
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full bg-blue-400 flex items-center justify-center text-white font-bold text-4xl">
-                  {user.name?.charAt(0) || "?"}
+                <div className="w-full h-full bg-blue-200 flex items-center justify-center">
+                  <span className="text-4xl font-bold text-white">
+                    {user.name ? user.name.charAt(0).toUpperCase() : "?"}
+                  </span>
                 </div>
               )}
             </div>
+            
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-slate-800">{user.name || "Employee Name"}</h2>
+            </div>
           </div>
 
-          {/* Profile Info */}
-          <div className="mt-20 px-12 py-8">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-gray-800">
-                {user.name || "Employee Name"}
-              </h2>
-              <p className="text-gray-500 mt-2">
-                {user.role?.toUpperCase() || "ROLE"}
-              </p>
-            </div>
+          {/* Details Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Employee ID */}
+            <DetailField 
+              label="Employee ID" 
+              value={user.employeeId || "N/A"} 
+              icon={<FiUser size={18} />} 
+            />
+            
+            {/* Email */}
+            <DetailField 
+              label="Email" 
+              value={user.email || "N/A"} 
+              icon={<FiMail size={18} />} 
+            />
+            
+            {/* Phone */}
+            <DetailField 
+              label="Phone" 
+              value={user.phone || "N/A"} 
+              icon={<FiPhone size={18} />} 
+            />
+            
+            {/* Department */}
+            <DetailField 
+              label="Department" 
+              value={user.department || "N/A"} 
+              icon={<FiBriefcase size={18} />} 
+            />
 
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 text-gray-700">
-              {[
-                ["Employee ID", user.employeeId],
-                ["Email", user.email],
-                ["Phone", user.phone],
-                ["Joining Date", user.joining_date],
-                ["Department", user.department],
-                ["Designation", user.designation],
-                ["Location", user.location],
-                ["Address", user.address],
-                ["Date of Birth", user.dob],
-                ["Gender", user.gender],
-              ].map(([label, value]) => (
-                <div key={label} className="flex justify-between border-b pb-3">
-                  <span className="font-medium">{label}:</span>
-                  <span className="text-gray-900">{value || "N/A"}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center">
-              <button
-                onClick={() => setOpenProfileModal(true)}
-                className="flex-1 py-3 bg-blue-600 text-black rounded-xl font-semibold hover:bg-red-400 transition"
-              >
-                Edit Profile
-              </button>
-
-              <button
-                onClick={() => setOpenPasswordModal(true)}
-                className="flex-1 py-3 border border-blue-300 text-sky-600 rounded-xl font-semibold hover:bg-blue-600 transition"
-              >
-                Change Password
-              </button>
-            </div>
+            {/* Designation */}
+            <DetailField 
+              label="Designation" 
+              value={user.designation || "N/A"} 
+              icon={<FiLayers size={18} />} 
+            />
+            
+            {/* Date of Joining */}
+            <DetailField 
+              label="Date of Joining" 
+              value={user.joining_date ? new Date(user.joining_date).toLocaleDateString() : "N/A"} 
+              icon={<FiCalendar size={18} />} 
+            />
+            
+            {/* Location */}
+            <DetailField 
+              label="Address" 
+              value={user.address || "N/A"} 
+              icon={<FiMapPin size={18} />} 
+            />
+            
+            {/* Date of Birth */}
+            <DetailField 
+              label="Date of Birth" 
+              value={user.dob ? new Date(user.dob).toLocaleDateString() : "N/A"} 
+              icon={<FiCalendar size={18} />} 
+            />
           </div>
         </div>
-      </main>
+      </div>
 
-      {/* Footer */}
       <Footer />
     </div>
   );
 };
 
 export default ProfilePage;
-
-
-
-
-
-
-
-
-
-
-// import React, { useEffect, useState } from 'react';
-// import Navbar from './Navbar';
-
-// const ProfilePage = () => {
-//   const [user, setUser] = useState({});
-
-//   useEffect(() => {
-//     const userData = localStorage.getItem('user');
-//     if (userData) {
-//       setUser(JSON.parse(userData));
-//     }
-//   }, []);
-
-//   return (
-//     <div className="min-h-screen bg-gray-100">
-//       <Navbar />
-
-//       <div className="flex justify-center items-start py-16 px-4">
-//         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden">
-          
-//           {/* Header */}
-//           <div className="bg-gradient-to-r from-sky-400 to-sky-300 h-40 relative">
-//             <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 w-32 h-32 rounded-full border-4 border-white overflow-hidden shadow-lg">
-//               <img
-//                 src={user.profileImage || 'https://via.placeholder.com/150'}
-//                 alt="Profile"
-//                 className="w-full h-full object-cover"
-//               />
-//             </div>
-//           </div>
-
-//           {/* Profile Info */}
-//           <div className="mt-20 px-12 py-8">
-//             <div className="text-center">
-//               <h2 className="text-3xl font-bold text-gray-800">{user.name || 'Employee Name'}</h2>
-//               <p className="text-gray-500 mt-2">{user.role ? user.role.toUpperCase() : 'ROLE'}</p>
-//             </div>
-
-//             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 text-gray-700">
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Employee ID:</span>
-//                 <span className="text-gray-900">{user.employeeId || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Email:</span>
-//                 <span className="text-gray-900">{user.email || 'user@example.com'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Phone:</span>
-//                 <span className="text-gray-900">{user.phone || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Joining Date:</span>
-//                 <span className="text-gray-900">{user.joining_date || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Department:</span>
-//                 <span className="text-gray-900">{user.department || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Designation:</span>
-//                 <span className="text-gray-900">{user.designation || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Location:</span>
-//                 <span className="text-gray-900">{user.location || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Address:</span>
-//                 <span className="text-gray-900">{user.address || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Date of Birth:</span>
-//                 <span className="text-gray-900">{user.dob || 'N/A'}</span>
-//               </div>
-//               <div className="flex justify-between border-b pb-3">
-//                 <span className="font-medium">Gender:</span>
-//                 <span className="text-gray-900">{user.gender || 'N/A'}</span>
-//               </div>
-//             </div>
-
-//             {/* Action Buttons */}
-//             <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center">
-//               <button className="flex-1 py-3 bg-blue-600 text-black rounded-xl font-semibold hover:bg-red-400 transition">
-//                 Edit Profile
-//               </button>
-//               <button className="flex-1 py-3 border border-blue-300 text-sky-600 rounded-xl font-semibold hover:bg-blue-600 transition">
-//                 Change Password
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default ProfilePage;
