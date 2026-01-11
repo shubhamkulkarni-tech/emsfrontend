@@ -17,6 +17,7 @@ const statusColors = {
   Absent: { bg: "bg-red-100", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
   Leave: { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", dot: "bg-yellow-500" },
   Late: { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-500" },
+  "Half Day": { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
 };
 
 const API_URL = "https://emsbackend-2w9c.onrender.com/api/attendance";
@@ -60,7 +61,6 @@ const Attendance = () => {
   const [recordToDelete, setRecordToDelete] = useState(null);
   const [currentTimer, setCurrentTimer] = useState({ hours: 0, minutes: 0, seconds: 0 });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-  const [modalDateTime, setModalDateTime] = useState({ date: '', time: '' });
 
   const activityTimeoutRef = useRef(null);
 
@@ -96,28 +96,18 @@ const Attendance = () => {
     return new Date(2000, 0, 1, hour24, minutes, seconds || 0);
   };
 
-  // --- Helper: Check if Late (12:30 PM to 16:00 PM) ---
-  const isLate = (timeStr) => {
-    if (!timeStr) return false;
+  // --- Helper: Calculate Status Based on Strict Rules ---
+  // 10-11: Present | 11-14: Late | 14-15: Half Day | >15: Absent
+  const getDerivedStatus = (timeStr) => {
+    if (!timeStr) return 'Absent';
+    
     const punch = parseTime(timeStr);
+    const hour = punch.getHours();
 
-    // Late Window: 12:30:00 to 16:00:00
-    const lateStart = new Date(2000, 0, 1, 12, 30, 0); // 12:30 PM
-    const lateEnd = new Date(2000, 0, 1, 16, 0, 0);   // 04:00 PM (Next day) / 16:00 (24h)
-
-    return punch >= lateStart && punch < lateEnd;
-  };
-
-  // --- Helper: Check if Absent (16:00 PM to 23:59) ---
-  const isAbsent = (timeStr) => {
-    if (!timeStr) return false;
-    const punch = parseTime(timeStr);
-
-    // Absent Window: 16:00:00 to 23:59:59
-    // 04:00 PM (Next day) / 16:00 (24h) start
-    const absentStart = new Date(2000, 0, 1, 16, 0, 0);
-
-    return punch >= absentStart;
+    if (hour >= 10 && hour < 11) return 'Present';
+    if (hour >= 11 && hour < 14) return 'Late';
+    if (hour >= 14 && hour < 15) return 'Half Day';
+    return 'Absent'; 
   };
 
   // --- Helper: Session Timer (Heartbeat) ---
@@ -281,7 +271,7 @@ const Attendance = () => {
     return () => clearInterval(interval);
   }, [isLoggedIn, loginTime]);
 
-  // --- DATA MERGE LOGIC ---
+  // --- DATA MERGE LOGIC WITH UPDATED STATUS RULES ---
   useEffect(() => {
     if (!user) return;
 
@@ -295,15 +285,12 @@ const Attendance = () => {
         temp = temp.filter((r) => r.date && r.date.startsWith(selectedDate));
       }
 
-      // Apply Shift Logic for Employee View
+      // Apply Shift Logic using new getDerivedStatus
       temp = temp.map(r => {
-        // Logic: If Punch In exists, check if Late or Absent, else Present.
         if (r.punch_in) {
-          if (isLate(r.punch_in)) return { ...r, status: 'Late' };
-          if (isAbsent(r.punch_in)) return { ...r, status: 'Absent' };
-          return { ...r, status: 'Present' }; // 00:00 to 12:29
+          return { ...r, status: getDerivedStatus(r.punch_in) };
         }
-        return r; // Keep Leave status or null status
+        return r; 
       });
 
       setDisplayData(temp);
@@ -323,7 +310,7 @@ const Attendance = () => {
         const onLeave = leaves.find(l => l.employeeId === empId && l.date === selectedDate);
         if (onLeave) {
           return {
-            _id: null, // <--- Fake Record, No ID
+            _id: null,
             employeeId: empId,
             name: u.name,
             date: selectedDate,
@@ -337,15 +324,22 @@ const Attendance = () => {
         const att = records.find(r => r.employeeId === empId && r.date === selectedDate);
 
         if (att) {
-          // Apply Shift Logic
-          let newStatus = 'Present';
-          if (isLate(att.punch_in)) newStatus = 'Late';
-          else if (isAbsent(att.punch_in)) newStatus = 'Absent';
+          // Use DB status if available, else calculate based on punch_in
+          // Here we recalculate to ensure strict time rule enforcement
+          let newStatus = getDerivedStatus(att.punch_in);
+          
+          // Override: If punch_out exists and is > 18:01 (Absent logic from backend)
+          if (att.punch_out) {
+             const hour = parseTime(att.punch_out).getHours();
+             if (hour > 18 || (hour === 18 && att.punch_out.includes("01") && !att.punch_out.includes("00"))) {
+               newStatus = 'Absent';
+             }
+          }
 
           return { ...att, status: newStatus };
         } else {
           return {
-            _id: null, // <--- Fake Record, No ID
+            _id: null,
             employeeId: empId,
             name: u.name,
             date: selectedDate,
@@ -357,11 +351,11 @@ const Attendance = () => {
         }
       });
 
-      // Sorting Priority: Present (1) < Late (2) < Leave (3) < Absent (4)
+      // Sorting Priority: Present (1) < Late (2) < Half Day (3) < Leave (4) < Absent (5)
       mergedList.sort((a, b) => {
-        const priority = { 'Present': 1, 'Late': 2, 'Leave': 3, 'Absent': 4 };
-        const pA = priority[a.status] || 4;
-        const pB = priority[b.status] || 4;
+        const priority = { 'Present': 1, 'Late': 2, 'Half Day': 3, 'Leave': 4, 'Absent': 5 };
+        const pA = priority[a.status] || 5;
+        const pB = priority[b.status] || 5;
         if (pA !== pB) return pA - pB;
         return a.name.localeCompare(b.name);
       });
@@ -414,7 +408,6 @@ const Attendance = () => {
   const handleUpdateRecord = async (e) => {
     e.preventDefault();
 
-    // --- FIX: Prevent updating records with _id: null ---
     if (!editingRecord._id) {
       setToast({ show: true, message: 'Cannot update this record. Employee has not punched in yet.', type: 'error' });
       setShowEditModal(false);
@@ -464,6 +457,7 @@ const Attendance = () => {
   const absentCount = displayData.filter(r => r.status === 'Absent').length;
   const leaveCount = displayData.filter(r => r.status === 'Leave').length;
   const lateCount = displayData.filter(r => r.status === 'Late').length;
+  const halfDayCount = displayData.filter(r => r.status === 'Half Day').length;
 
   return (
     <><div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
@@ -495,7 +489,7 @@ const Attendance = () => {
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-6 mb-8">
           {canViewAllRecords && (
             <>
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
@@ -503,21 +497,22 @@ const Attendance = () => {
                 <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Present</p><p className="text-2xl font-bold text-slate-800">{presentCount}</p></div>
               </div>
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
-                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0"><FiXCircle size={24} /></div>
-                <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Absent</p><p className="text-2xl font-bold text-slate-800">{absentCount}</p></div>
+                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><FiClock size={24} /></div>
+                <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Late</p><p className="text-2xl font-bold text-slate-800">{lateCount}</p></div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0"><FiActivity size={24} /></div>
+                <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Half Day</p><p className="text-2xl font-bold text-slate-800">{halfDayCount}</p></div>
               </div>
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
                 <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 shrink-0"><FiCalendar size={24} /></div>
                 <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">On Leave</p><p className="text-2xl font-bold text-slate-800">{leaveCount}</p></div>
               </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0"><FiXCircle size={24} /></div>
+                <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Absent</p><p className="text-2xl font-bold text-slate-800">{absentCount}</p></div>
+              </div>
             </>
-          )}
-          {/* Late Card */}
-          {lateCount > 0 && (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
-              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><FiClock size={24} /></div>
-              <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Late</p><p className="text-2xl font-bold text-slate-800">{lateCount}</p></div>
-            </div>
           )}
 
           {/* Live Timer Card */}
@@ -622,7 +617,6 @@ const Attendance = () => {
                             >
                               <button
                                 className="block w-full text-left px-4 py-3 text-sm font-medium text-slate-700 hover:bg-blue-50 flex items-center gap-2 hover:text-blue-600 transition-colors"
-                                // --- FIX: Only allow Edit if record exists (has ID) ---
                                 onClick={() => {
                                   if (!rec._id) {
                                     setToast({ show: true, message: 'Cannot edit absent record (No punch-in)', type: 'error' });
@@ -637,7 +631,6 @@ const Attendance = () => {
                               </button>
                               <div className="border-t border-slate-100">
                                 <button
-                                  // --- FIX: Only allow Delete if record exists (has ID) ---
                                   onClick={() => {
                                     if (!rec._id) {
                                       setToast({ show: true, message: 'Cannot delete absent record (No punch-in)', type: 'error' });
@@ -718,6 +711,7 @@ const Attendance = () => {
                 <select value={editingRecord.status} onChange={(e) => setEditingRecord({ ...editingRecord, status: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:outline-none">
                   <option value="Present">Present</option>
                   <option value="Late">Late</option>
+                  <option value="Half Day">Half Day</option>
                   <option value="Absent">Absent</option>
                   <option value="Leave">Leave</option>
                 </select>

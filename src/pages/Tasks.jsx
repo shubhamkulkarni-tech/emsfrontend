@@ -304,7 +304,7 @@ const Task = () => {
             </div>
         )}
 
-        {/* List View - COMPACT HORIZONTAL LAYOUT */}
+        {/* List View */}
         {loading ? (
           <div className="flex flex-col justify-center items-center py-32">
             <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
@@ -479,8 +479,15 @@ const Task = () => {
             background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(37, 99, 235, 0.75) 50%, rgba(15, 23, 42, 0.95) 100%)"
           }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out]">
-            
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden animate-[fadeIn_0.2s_ease-out]"
+            style={{
+              maxWidth: "1125px", // Increased from max-w-4xl (896px) to maintain 75% zoom appearance
+              maxHeight: "100vh", // Slightly reduced to maintain proportions
+              transform: "scale(0.75)", // This is the key change - scaling to 75%
+              transformOrigin: "center"
+            }}
+          >
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-100 bg-white shrink-0 z-10 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center gap-3">
@@ -500,11 +507,9 @@ const Task = () => {
               </button>
             </div>
 
-            {/* Body: Split Layout */}
-            <div className="flex flex-col md:flex-row h-full overflow-hidden">
-              
+            <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
               {/* LEFT COLUMN: Quick Stats & Status */}
-              <div className="w-full md:w-1/3 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 p-6 flex flex-col gap-6 shrink-0 overflow-y-auto custom-scrollbar">
+              <div className="w-full md:w-1/3 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 p-6 flex flex-col gap-6 shrink-0">
                 
                 {/* Priority & Status */}
                 <div className="flex flex-col gap-3">
@@ -547,12 +552,14 @@ const Task = () => {
               </div>
 
               {/* RIGHT COLUMN: Detailed Info */}
-              <div className="w-full md:w-2/3 p-6 bg-white flex flex-col h-full overflow-y-auto custom-scrollbar">
+              <div className="w-full md:w-2/3 p-6 bg-white flex flex-col min-h-0 overflow-y-auto">
                  <div className="mb-6">
                     <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Task Details</h3>
                     <div className="mt-4">
                         <p className="text-[10px] text-slate-400 uppercase font-semibold mb-1">Description</p>
-                        <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{viewTicket.description || "No description provided."}</p>
+                        <div className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
+                          {viewTicket.description || "No description provided."}
+                        </div>
                     </div>
                  </div>
                  
@@ -580,7 +587,7 @@ const Task = () => {
                  <div className="mb-6">
                     <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Additional Notes</h3>
                     <div className="mt-4">
-                        <p className="text-slate-600 italic text-sm bg-yellow-50 p-4 rounded-xl border border-yellow-100">
+                        <p className="text-slate-600 italic text-sm bg-yellow-50 p-4 rounded-xl border border-yellow-100 ">
                             {viewTicket.notes || "No additional notes."}
                         </p>
                     </div>
@@ -612,9 +619,9 @@ const Task = () => {
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Review Task</h2>
                 <p className="text-slate-500 text-sm">Review the work submitted for <span className="font-bold text-slate-700">{selectedTicketForReview.title}</span>.</p>
             </div>
-            <div className="bg-slate-50 p-4 rounded-xl mb-6">
+            <div className="bg-slate-50 p-4 rounded-xl mb-6 max-h-40 overflow-y-auto">
                 <p className="text-[10px] text-slate-400 uppercase font-semibold mb-1">Description</p>
-                <p className="text-sm text-slate-700 truncate">{selectedTicketForReview.description}</p>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedTicketForReview.description}</p>
             </div>
             <div className="flex gap-4 mt-2">
               <button onClick={() => handleReviewAction("revert")} className="flex-1 px-4 py-3 rounded-xl bg-white border border-red-200 text-red-600 font-semibold hover:bg-red-50 transition">Revert Work</button>
@@ -643,45 +650,46 @@ const Task = () => {
 
       {/* ===== DELETE MODAL ===== */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-xl p-4"
+          style={{
+            background: "linear-gradient(135deg, rgba(2, 6, 23, 0.85) 0%, rgba(37, 99, 235, 0.45) 50%, rgba(2, 6, 23, 0.85) 100%)",
+          }}
+        >
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-96 text-center animate-[fadeIn_0.2s_ease-out]">
             <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
-               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">Delete Task?</h2>
-            <p className="text-slate-500 mb-6 text-sm leading-relaxed">This will permanently remove this task and all associated history. This action cannot be undone.</p>
+            <p className="text-slate-500 mb-6 text-sm leading-relaxed">
+              This will permanently remove this task and all associated history. This
+              action cannot be undone.
+            </p>
             <div className="flex justify-center gap-3">
-              <button onClick={() => setModalOpen(false)} className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition font-medium text-sm">Cancel</button>
-              <button onClick={handleDelete} className="px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium text-sm shadow-lg shadow-red-200">Delete</button>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition font-medium text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium text-sm shadow-lg shadow-red-200"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #cbd5e1;
-          border-radius: 20px;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
-
-      <Toast 
-        message={toast.message} 
-        type={toast.type} 
-        isVisible={toast.show} 
-        onClose={() => setToast({ show: false, message: "", type: "success" })} 
-      />
       <Footer />
+      <Toast 
+        toast={toast} 
+        setToast={setToast} 
+      />
     </div>
   );
 };
