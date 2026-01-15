@@ -18,6 +18,8 @@ const statusColors = {
   Leave: { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", dot: "bg-yellow-500" },
   Late: { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-500" },
   "Half Day": { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
+  "Auto Punch Out": { bg: "bg-orange-50", text: "text-orange-800", border: "border-orange-200", dot: "bg-orange-600" }, 
+  "Failed Punchout": { bg: "bg-red-50", text: "text-red-600", border: "border-red-200", dot: "bg-red-600" }, 
 };
 
 const API_URL = "https://emsbackend-2w9c.onrender.com/api/attendance";
@@ -30,7 +32,6 @@ const Attendance = () => {
   const {
     user,
     isLoggedIn,
-    loginTime,
     attendanceRecord,
     logoutTime,
     setIsLoggedIn,
@@ -59,7 +60,6 @@ const Attendance = () => {
   // CRUD States
   const [editingRecord, setEditingRecord] = useState(null);
   const [recordToDelete, setRecordToDelete] = useState(null);
-  const [currentTimer, setCurrentTimer] = useState({ hours: 0, minutes: 0, seconds: 0 });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   const activityTimeoutRef = useRef(null);
@@ -97,7 +97,6 @@ const Attendance = () => {
   };
 
   // --- Helper: Calculate Status Based on Strict Rules ---
-  // 10-11: Present | 11-14: Late | 14-15: Half Day | >15: Absent
   const getDerivedStatus = (timeStr) => {
     if (!timeStr) return 'Absent';
     
@@ -254,24 +253,16 @@ const Attendance = () => {
         loginTime: todayRecord.punch_in, date: todayRecord.date, _id: todayRecord._id
       });
       setLogoutTime(null);
+    } else {
+      setIsLoggedIn(false);
+      setAttendanceRecord(null);
+      setLoginTime(null);
     }
   };
 
   useEffect(() => { if (user) fetchRecords(); }, [user]);
 
-  // Working Timer Logic
-  useEffect(() => {
-    let interval;
-    if (isLoggedIn && loginTime) {
-      interval = setInterval(() => {
-        const nowIST = getISTDateTime().time;
-        setCurrentTimer(calculateWorkingHours(loginTime, nowIST));
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isLoggedIn, loginTime]);
-
-  // --- DATA MERGE LOGIC WITH UPDATED STATUS RULES ---
+  // --- DATA MERGE LOGIC WITH AUTO PUNCH OUT RULE ---
   useEffect(() => {
     if (!user) return;
 
@@ -285,12 +276,25 @@ const Attendance = () => {
         temp = temp.filter((r) => r.date && r.date.startsWith(selectedDate));
       }
 
-      // Apply Shift Logic using new getDerivedStatus
       temp = temp.map(r => {
-        if (r.punch_in) {
-          return { ...r, status: getDerivedStatus(r.punch_in) };
+        // Default status based on Punch In
+        let currentStatus = getDerivedStatus(r.punch_in);
+        
+        // AUTO PUNCH OUT RULE:
+        // If punch_out exists and is >= 18:00, force status to "Auto Punch Out"
+        if (r.punch_out) {
+            const hour = parseTime(r.punch_out).getHours();
+            if (hour >= 18) {
+                currentStatus = 'Auto Punch Out';
+            }
         }
-        return r; 
+
+        // Respect specific DB overrides (like explicit Failed Punchout)
+        if (r.status === 'Failed Punchout' || r.status === 'Auto Punch Out' || r.status === 'Leave') {
+            currentStatus = r.status;
+        }
+
+        return { ...r, status: currentStatus };
       });
 
       setDisplayData(temp);
@@ -324,19 +328,24 @@ const Attendance = () => {
         const att = records.find(r => r.employeeId === empId && r.date === selectedDate);
 
         if (att) {
-          // Use DB status if available, else calculate based on punch_in
-          // Here we recalculate to ensure strict time rule enforcement
-          let newStatus = getDerivedStatus(att.punch_in);
+          // Default status based on Punch In
+          let finalStatus = getDerivedStatus(att.punch_in);
           
-          // Override: If punch_out exists and is > 18:01 (Absent logic from backend)
+          // AUTO PUNCH OUT RULE:
+          // If punch_out exists and is >= 18:00, force status to "Auto Punch Out"
           if (att.punch_out) {
              const hour = parseTime(att.punch_out).getHours();
-             if (hour > 18 || (hour === 18 && att.punch_out.includes("01") && !att.punch_out.includes("00"))) {
-               newStatus = 'Absent';
-             }
+             if (hour >= 18) {
+                 finalStatus = 'Auto Punch Out';
+             } 
+          }
+          
+          // Respect DB explicit override if it's leave or absent
+          if (att.status === 'Leave' || att.status === 'Absent' || att.status === 'Failed Punchout') {
+              finalStatus = att.status;
           }
 
-          return { ...att, status: newStatus };
+          return { ...att, status: finalStatus };
         } else {
           return {
             _id: null,
@@ -351,9 +360,9 @@ const Attendance = () => {
         }
       });
 
-      // Sorting Priority: Present (1) < Late (2) < Half Day (3) < Leave (4) < Absent (5)
+      // Sorting Priority: Present < Late < Half Day < Leave < Auto Punch Out < Absent
       mergedList.sort((a, b) => {
-        const priority = { 'Present': 1, 'Late': 2, 'Half Day': 3, 'Leave': 4, 'Absent': 5 };
+        const priority = { 'Present': 1, 'Late': 2, 'Half Day': 3, 'Leave': 4, 'Auto Punch Out': 4.5, 'Failed Punchout': 4.6, 'Absent': 5 };
         const pA = priority[a.status] || 5;
         const pB = priority[b.status] || 5;
         if (pA !== pB) return pA - pB;
@@ -363,6 +372,10 @@ const Attendance = () => {
       setDisplayData(mergedList);
     }
   }, [search, selectedDate, records, users, user, leaves]);
+
+  // --- Helpers for Today's Status ---
+  const istDate = getISTDateTime().date;
+  const myTodayRecord = records.find(r => r.date === istDate && r.employeeId === user.employeeId);
 
   // --- Handlers ---
   const handlePunchIn = async () => {
@@ -384,6 +397,23 @@ const Attendance = () => {
 
   const handlePunchOut = async () => {
     if (!user || !attendanceRecord) return;
+    
+    // --- RESTRICTION: Check if before 17:00 (5:00 PM) ---
+    const currentTimeStr = getISTDateTime().time; 
+    const currentDateObj = parseTime(currentTimeStr);
+    const currentHour = currentDateObj.getHours(); 
+
+    if (currentHour < 17) {
+      setToast({ 
+        show: true, 
+        message: "You'll have to wait till 5:00:00 to punchout", 
+        type: 'error' 
+      });
+      setShowPunchOutModal(false); 
+      return; 
+    }
+    // ------------------------------------------------
+
     const sessionDate = attendanceRecord.date;
     const currentTime = getISTDateTime().time;
     try {
@@ -392,7 +422,11 @@ const Attendance = () => {
         employeeId: user.employeeId, date: sessionDate,
         punch_out: currentTime, workingHours: formatTimer(workingHours)
       }, { headers: getAuthHeader() });
-      setLogoutTime(currentTime); setIsLoggedIn(false); setAttendanceRecord(null);
+      
+      setLogoutTime(currentTime); 
+      setIsLoggedIn(false); 
+      setAttendanceRecord(null);
+      
       setRecords(prev => prev.map(r => r._id === attendanceRecord._id
         ? { ...r, punch_out: currentTime, workingHours: formatTimer(workingHours) } : r
       ));
@@ -458,6 +492,7 @@ const Attendance = () => {
   const leaveCount = displayData.filter(r => r.status === 'Leave').length;
   const lateCount = displayData.filter(r => r.status === 'Late').length;
   const halfDayCount = displayData.filter(r => r.status === 'Half Day').length;
+  const autoPunchOutCount = displayData.filter(r => r.status === 'Auto Punch Out').length;
 
   return (
     <><div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
@@ -467,7 +502,7 @@ const Attendance = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
           <div>
             <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Attendance Directory</h1>
-            <p className="text-slate-500 text-sm mt-1">Manage daily punches, working hours, and leave status</p>
+            <p className="text-slate-500 text-sm mt-1">Manage daily punches and working hours</p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
@@ -489,7 +524,40 @@ const Attendance = () => {
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-6 mb-8">
+
+        {/* --- NEW: USER'S TODAY STATUS CARDS --- */}
+        {user && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* Punch In Card */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0">
+                <FiLogIn size={24} />
+              </div>
+              <div className="flex flex-col justify-center">
+                <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Punch In (Today)</p>
+                <p className="text-2xl font-bold text-slate-800 font-mono">
+                  {isLoggedIn && attendanceRecord?.loginTime ? attendanceRecord.loginTime : (myTodayRecord?.punch_in || '--:--')}
+                </p>
+              </div>
+            </div>
+
+            {/* Punch Out Card */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                <FiLogOut size={24} />
+              </div>
+              <div className="flex flex-col justify-center">
+                <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Punch Out (Today)</p>
+                <p className="text-2xl font-bold text-slate-800 font-mono">
+                  {isLoggedIn ? '--:--' : (myTodayRecord?.punch_out || '--:--')}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- ADMIN/HR STATS GRID --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
           {canViewAllRecords && (
             <>
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
@@ -514,26 +582,8 @@ const Attendance = () => {
               </div>
             </>
           )}
-
-          {/* Live Timer Card */}
-          {isLoggedIn ? (
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-6 rounded-2xl shadow-lg shadow-indigo-200 border border-blue-500 flex items-center justify-between min-h-[120px] col-span-1 md:col-span-1 text-white relative overflow-hidden group">
-              <div className="absolute -right-4 -top-4 w-24 h-24 bg-white opacity-10 rounded-full group-hover:scale-110 transition-transform"></div>
-              <div className="flex flex-col justify-center z-10">
-                <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Live Session
-                </p>
-                <p className="text-4xl font-mono font-bold tracking-tighter">{formatTimer(currentTimer)}</p>
-                <p className="text-blue-200 text-xs mt-1 font-medium">Since {loginTime}</p>
-              </div>
-              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white z-10">
-                <FiClock size={28} />
-              </div>
-            </div>
-          ) : !canViewAllRecords && (
-            <div className="col-span-4"></div>
-          )}
         </div>
+
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 w-full gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex gap-1 p-1">
             <button onClick={() => setViewMode('list')} className={`px-5 py-2 rounded-xl font-medium transition-all duration-200 ${viewMode === 'list' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>List View</button>
@@ -577,7 +627,7 @@ const Attendance = () => {
                   {displayData.length === 0 ? (
                     <tr><td colSpan={canViewAllRecords ? 7 : 6} className="p-12 text-center text-slate-400">No records found for this date.</td></tr>
                   ) : displayData.map((rec) => (
-                    <tr key={rec.employeeId + rec.date} className={`hover:bg-blue-50/30 transition duration-200 group ${rec.status === 'Absent' ? 'bg-red-50/20' : ''}`}>
+                    <tr key={rec.employeeId + rec.date} className={`hover:bg-blue-50/30 transition duration-200 group ${rec.status === 'Absent' || rec.status === 'Auto Punch Out' ? 'bg-red-50/20' : ''}`}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0 border border-slate-200">
@@ -690,11 +740,16 @@ const Attendance = () => {
               <FiLogOut size={32} />
             </div>
             <h2 className="text-2xl font-bold text-slate-800 mb-2">End Session?</h2>
-            <p className="text-slate-500 mb-4">Stop tracking time.</p>
-            <div className="text-4xl font-mono font-bold text-slate-800 mb-6 bg-slate-50 py-3 rounded-xl border border-slate-100">{formatTimer(currentTimer)}</div>
+            <p className="text-slate-500 mb-6">Stop tracking time. Total hours will be calculated upon confirmation.</p>
+            
+            <div className="flex flex-col items-center justify-center bg-slate-50 py-4 rounded-xl border border-slate-100 mb-6">
+                 <p className="text-xs text-slate-400 uppercase font-semibold mb-1">Session Started</p>
+                 <p className="text-lg font-mono text-slate-700 font-semibold">{attendanceRecord?.loginTime || "--:--"}</p>
+            </div>
+
             <div className="flex gap-3">
               <button onClick={() => setShowPunchOutModal(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition">Cancel</button>
-              <button onClick={handlePunchOut} className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition shadow-lg shadow-red-200">Confirm</button>
+              <button onClick={handlePunchOut} className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition shadow-lg shadow-red-200">Confirm Punch Out</button>
             </div>
           </div>
         </div>
@@ -714,6 +769,8 @@ const Attendance = () => {
                   <option value="Half Day">Half Day</option>
                   <option value="Absent">Absent</option>
                   <option value="Leave">Leave</option>
+                  <option value="Auto Punch Out">Auto Punch Out</option>
+                  <option value="Failed Punchout">Failed Punchout</option>
                 </select>
               </div>
               <div>
