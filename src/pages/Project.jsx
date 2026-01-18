@@ -4,7 +4,7 @@ import {
   FiCalendar, FiUser, FiMoreVertical, FiFolder, FiSearch, 
   FiX, FiBriefcase, FiFilter, FiEdit, FiTrash2, FiCheckCircle, FiClock
 } from "react-icons/fi";
-import Navbar from "../components/Navbar";
+
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
 import { useNavigate } from "react-router-dom";
@@ -171,7 +171,7 @@ const Projects = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
 
       <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
         
@@ -479,7 +479,7 @@ const Projects = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }

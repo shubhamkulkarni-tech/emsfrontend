@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FiMoreVertical, FiSearch, FiX, FiUsers, FiShield, FiUser, FiCalendar, FiBriefcase, FiEye } from "react-icons/fi";
-import Navbar from "../components/Navbar";
+
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
 
@@ -141,7 +141,7 @@ const Team = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
 
       <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
         
@@ -529,7 +529,7 @@ const Team = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }

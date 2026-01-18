@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import Navbar from './Navbar';
 import Footer from './Footer';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { 
-  FiActivity, FiCheckCircle, FiClock, FiUsers, 
-  FiTrendingUp, FiSettings, FiArrowRight, FiCalendar, FiUser // Added FiUser here
+
+import {
+  FiActivity, FiCheckCircle, FiClock, FiUsers,
+  FiTrendingUp, FiSettings, FiArrowRight, FiUser
 } from "react-icons/fi";
 import Toast from './Toast';
 import {
@@ -49,9 +49,9 @@ const TaskDistributionChart = ({ completed, pending, inProgress }) => {
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip 
-          contentStyle={{ 
-            backgroundColor: 'white', 
+        <Tooltip
+          contentStyle={{
+            backgroundColor: 'white',
             border: '1px solid #e2e8f0',
             borderRadius: '8px',
             color: '#334155'
@@ -63,13 +63,26 @@ const TaskDistributionChart = ({ completed, pending, inProgress }) => {
 };
 
 const Dashboard = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
+  // ✅ Safe User Fetching
+  const [user, setUser] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-  
+
   const navigate = useNavigate();
+
+  // 1. Load User First to prevent crash
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (err) {
+        console.error("Failed to parse user", err);
+      }
+    }
+  }, []);
 
   const fetchDashboardData = async () => {
     if (!user) return;
@@ -87,30 +100,28 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
+    if (user) {
+      fetchDashboardData();
+      const interval = setInterval(fetchDashboardData, 30000);
+      return () => clearInterval(interval);
+    }
   }, [user]);
 
-  if (!user) return <p className="p-10 text-center text-slate-600">Loading user information...</p>;
+  if (!user) return <p className="text-center text-slate-600 py-10">Loading user information...</p>;
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
-        <Navbar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
-        </div>
-        <Footer />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
       </div>
     );
   }
 
-  if (error || !stats) return <p className="p-10 text-center text-red-600">Unable to load dashboard data.</p>;
+  if (error || !stats) return <p className="text-center text-red-600 p-10">Unable to load dashboard data.</p>;
 
   const { role, name } = user;
 
-  // Dummy Data for Weekly Chart (as per original code)
+  // Dummy Data for Weekly Chart
   const barData = [
     { name: 'Week 1', Performance: 70 },
     { name: 'Week 2', Performance: 76 },
@@ -119,17 +130,15 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+    <div className="flex flex-col bg-slate-50 min-h-screen text-slate-800 font-sans">
+      <div className="w-full max-w-8xl mx-auto pb-8">
 
-      <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
-        
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6 animate-[fadeIn_0.5s_ease-out]">
           <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
             Welcome back, <span className="text-blue-600">{name}</span>
           </h1>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-">
             <span className="bg-blue-100 text-blue-700 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border border-blue-200">
               {role}
             </span>
@@ -138,45 +147,45 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${role === 'admin' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6 mb-8`}>
-          
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${role === 'admin' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6 mb-8 animate-[fadeIn_0.6s_ease-out]`}>
+
           {/* Total Tasks */}
-          <StatsCard 
-            title="Total Tasks" 
-            value={stats.totalTasks} 
+          <StatsCard
+            title="Total Tasks"
+            value={stats.totalTasks}
             icon={<FiActivity size={24} />}
             color="bg-indigo-100 text-indigo-600"
           />
-          
+
           {/* Completed Tasks */}
-          <StatsCard 
-            title="Completed" 
-            value={stats.completedTasks} 
+          <StatsCard
+            title="Completed"
+            value={stats.completedTasks}
             icon={<FiCheckCircle size={24} />}
             color="bg-green-100 text-green-600"
           />
-          
+
           {/* Pending Tasks */}
-          <StatsCard 
-            title="Pending" 
-            value={stats.pendingTasks} 
+          <StatsCard
+            title="Pending"
+            value={stats.pendingTasks}
             icon={<FiClock size={24} />}
             color="bg-orange-100 text-orange-600"
           />
-          
+
           {/* Performance */}
-          <StatsCard 
-            title="Performance" 
-            value={`${stats.performance}%`} 
+          <StatsCard
+            title="Performance"
+            value={`${stats.performance}%`}
             icon={<FiTrendingUp size={24} />}
             color="bg-blue-100 text-blue-600"
           />
-          
+
           {/* Total Users (Admin Only) */}
           {role === 'admin' && (
-            <StatsCard 
-              title="Total Users" 
-              value={stats.totalUsers || 0} 
+            <StatsCard
+              title="Total Users"
+              value={stats.totalUsers || 0}
               icon={<FiUsers size={24} />}
               color="bg-purple-100 text-purple-600"
             />
@@ -184,7 +193,7 @@ const Dashboard = () => {
         </div>
 
         {/* Performance Progress Card */}
-        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 mb-8">
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 mb-8 animate-[fadeIn_0.7s_ease-out]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-slate-800">Overall Performance</h3>
             <span className="text-3xl font-bold text-blue-600">{stats.performance}%</span>
@@ -199,15 +208,15 @@ const Dashboard = () => {
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 animate-[fadeIn_0.8s_ease-out]">
+
           {/* Task Distribution */}
           <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-6">Ticket Distribution</h3>
-            <TaskDistributionChart 
-              completed={stats.completedTasks} 
-              pending={stats.pendingTasks} 
-              inProgress={stats.inProgressTasks || 0} 
+            <TaskDistributionChart
+              completed={stats.completedTasks}
+              pending={stats.pendingTasks}
+              inProgress={stats.inProgressTasks || 0}
             />
           </div>
 
@@ -219,9 +228,9 @@ const Dashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'white', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'white',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
                     color: '#334155'
@@ -234,16 +243,16 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-[fadeIn_0.9s_ease-out]">
+
           {/* Recent Activities */}
           <div className="lg:col-span-2 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-4">Recent Activities</h3>
             <div className="space-y-3">
               {stats.activities && stats.activities.length > 0 ? (
                 stats.activities.map((item, index) => (
-                  <div 
-                    key={item.id || index} 
+                  <div
+                    key={item.id || index}
                     className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100 hover:bg-blue-50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
@@ -276,16 +285,16 @@ const Dashboard = () => {
                 {role === 'manager' && "Oversee team performance, assign tasks, and review workflows."}
               </p>
             </div>
-            
+
             <div className="space-y-3">
-              <button 
+              <button
                 onClick={() => navigate(role === 'admin' ? '/employees' : role === 'hr' ? '/employees' : '/tasks')}
-                className="w-full flex items-center justify-between px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium text-sm"
+                className="w-full flex items-center justify-between px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium text-sm shadow-md shadow-blue-200"
               >
                 <span>Manage {role === 'admin' ? 'Users' : role === 'hr' ? 'Employees' : 'Tasks'}</span>
                 <FiArrowRight size={16} />
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/profile')}
                 className="w-full flex items-center justify-between px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition font-medium text-sm"
               >
@@ -296,16 +305,18 @@ const Dashboard = () => {
           </div>
         </div>
 
-      </div>
+        {/* Footer inside Dashboard (Optional) */}
+        <div className="mt-12">
+          <Footer />
+        </div>
 
-      <Toast 
-        message={toast.message}
-        type={toast.type}
-        isVisible={toast.show}
-        onClose={() => setToast({ ...toast, show: false })}
-      />
-      
-      <Footer />
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          isVisible={toast.show}
+          onClose={() => setToast({ ...toast, show: false })}
+        />
+      </div>
     </div>
   );
 };
@@ -313,7 +324,7 @@ const Dashboard = () => {
 // --- STATS CARD COMPONENT ---
 const StatsCard = ({ title, value, icon, color }) => {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[140px]">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center gap-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 min-h-[140px]">
       <div className={`w-12 h-12 rounded-full ${color.split(' ')[0]} flex items-center justify-center ${color.split(' ')[1]} shrink-0`}>
         {icon}
       </div>
@@ -324,5 +335,4 @@ const StatsCard = ({ title, value, icon, color }) => {
     </div>
   );
 };
-
 export default Dashboard;

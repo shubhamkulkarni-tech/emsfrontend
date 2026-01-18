@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
+
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
 import { 
@@ -288,7 +288,7 @@ const AddTask = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
       
       <div className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full">
         
@@ -774,7 +774,7 @@ const AddTask = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }

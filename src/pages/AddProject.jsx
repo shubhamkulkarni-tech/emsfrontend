@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import API from "../api/axios";
 import { useNavigate, Link } from "react-router-dom";
-import Navbar from "../components/Navbar";
+
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
 import { FiArrowLeft, FiBriefcase, FiCalendar, FiUser, FiLayers, FiCheckCircle, FiPlus } from "react-icons/fi";
@@ -72,7 +72,7 @@ const AddProject = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
       
       <div className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full">
         

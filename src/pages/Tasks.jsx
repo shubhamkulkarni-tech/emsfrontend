@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
+
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
 import { 
@@ -12,7 +12,7 @@ import {
 
 // --- AXIOS INSTANCE ---
 const api = axios.create({
-  baseURL: "https://emsbackend-2w9c.onrender.comhttps://emsbackend-2w9c.onrender.com/api",
+  baseURL: "https://emsbackend-2w9c.onrender.com/api",
 });
 
 api.interceptors.request.use((config) => {
@@ -237,7 +237,7 @@ const Task = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
 
       <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
         

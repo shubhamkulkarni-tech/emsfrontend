@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FiMoreVertical, FiSearch, FiX, FiUsers, FiShield, FiCalendar, FiBriefcase, FiEye, FiMail, FiPhone, FiMapPin } from "react-icons/fi";
-import Navbar from "./Navbar";
+
 import Footer from "./Footer";
 import Toast from "./Toast";
 
@@ -171,7 +171,7 @@ const Employees = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
 
       <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
         
@@ -281,7 +281,7 @@ const Employees = () => {
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md text-xs shrink-0 overflow-hidden">
                                 {emp.profileImage ? (
-                                    <img src={`${emp.profileImage}`} alt="" className="w-full h-full object-cover" />
+                                    <img src={`https://emsbackend-2w9c.onrender.com${emp.profileImage}`} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                     emp.name.charAt(0).toUpperCase()
                                 )}
@@ -419,7 +419,7 @@ const Employees = () => {
                 <div className="flex flex-col items-center text-center">
                   <div className="w-28 h-28 rounded-full border-4 border-white shadow-md overflow-hidden bg-white mb-4">
                     {viewEmployee.profileImage ? (
-                        <img src={`${viewEmployee.profileImage}`} alt="" className="w-full h-full object-cover" />
+                        <img src={`https://emsbackend-2w9c.onrender.com${viewEmployee.profileImage}`} alt="" className="w-full h-full object-cover" />
                     ) : (
                         <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-4xl">
                             {viewEmployee.name?.charAt(0)}
@@ -538,7 +538,7 @@ const Employees = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }

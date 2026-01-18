@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import Navbar from "./Navbar";
+
 import Footer from "./Footer";
 import Toast from "./Toast";
 import { 
@@ -166,7 +166,7 @@ const AddEmployee = () => {
   if (submitting) {
     return (
       <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-        <Navbar />
+
         <div className="flex-1 flex items-center justify-center p-6">
             <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
         </div>
@@ -185,7 +185,7 @@ const AddEmployee = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
 
       <div className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full">
         
@@ -561,7 +561,7 @@ const AddEmployee = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }

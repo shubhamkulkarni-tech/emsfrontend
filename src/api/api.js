@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://emsbackend-2w9c.onrender.comhttps://emsbackend-2w9c.onrender.com/api",
+  baseURL: "https://emsbackend-2w9c.onrender.com/api",
 });
 
 api.interceptors.request.use((config) => {

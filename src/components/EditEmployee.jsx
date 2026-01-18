@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import Navbar from "./Navbar";
+
 import Footer from "./Footer";
 import Toast from "./Toast";
 import { 
@@ -196,7 +196,7 @@ const EditEmployee = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-slate-50">
-        <Navbar />
+
         <div className="flex-1 flex items-center justify-center">
           <div className="text-xl text-blue-700">Loading employee data...</div>
         </div>
@@ -207,7 +207,7 @@ const EditEmployee = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
 
       <div className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full">
         
@@ -251,7 +251,7 @@ const EditEmployee = () => {
                       />
                     ) : profileImage ? (
                       <img 
-                        src={`${profileImage}`}
+                        src={`https://emsbackend-2w9c.onrender.com${profileImage}`}
                         alt={formData.name}
                         className="w-full h-full object-cover"
                       />

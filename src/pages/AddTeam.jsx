@@ -5,7 +5,7 @@ import {
   FiPlusCircle, FiUsers, FiShield, FiX, FiChevronDown, 
   FiBriefcase, FiUserCheck 
 } from "react-icons/fi";
-import Navbar from "../components/Navbar";
+
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
 
@@ -121,7 +121,7 @@ const AddTeam = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
 
       <div className="flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full">
         
@@ -291,7 +291,7 @@ const AddTeam = () => {
         </form>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }

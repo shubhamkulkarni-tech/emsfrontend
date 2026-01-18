@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import Navbar from "../components/Navbar";
+
 import Footer from "../components/Footer";
 import { FiClock, FiUser, FiCalendar } from "react-icons/fi";
 
@@ -74,7 +74,7 @@ const MyTickets = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-blue-100">
-      <Navbar />
+      
 
       <div className="flex-1 p-6 max-w-7xl mx-auto w-full">
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">

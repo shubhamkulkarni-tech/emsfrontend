@@ -49,7 +49,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
-      <Navbar />
+      
 
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4 md:p-8 overflow-x-hidden">

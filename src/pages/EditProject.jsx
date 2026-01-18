@@ -126,7 +126,7 @@ const EditProject = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-        <Navbar />
+
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
         </div>
@@ -137,7 +137,7 @@ const EditProject = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
+      
       
       <div className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full">
         
