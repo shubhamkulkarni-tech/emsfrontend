@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import CompanyLogo from "../assets/logo.png";
 import { GrDocumentMissing } from "react-icons/gr";
 import { Bell, Menu, X, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
+import { TiMessages } from "react-icons/ti";
 
 import {
   getMyNotifications,
@@ -19,7 +20,7 @@ const getUserSafe = () => {
     const raw = localStorage.getItem("user");
     if (!raw || raw === "undefined" || raw === "null") return null;
     return JSON.parse(raw);
-  } catch (err) {
+  } catch {
     return null;
   }
 };
@@ -28,12 +29,11 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ✅ UI States
   const [mobileMenu, setMobileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
-  // ✅ Notifications States
+  // ✅ Notifications
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
@@ -41,7 +41,6 @@ const Navbar = () => {
   const notifRef = useRef(null);
   const profileRef = useRef(null);
 
-  // ✅ Auth / User
   const user = getUserSafe();
   const token = localStorage.getItem("token");
   const userId = user?._id || user?.id;
@@ -58,10 +57,10 @@ const Navbar = () => {
     if (!token) return;
     try {
       setLoadingNotifs(true);
-      const res = await getMyNotifications(token);
+      const res = await getMyNotifications(token, 1, 10);
       setNotifications(res?.data?.data || []);
     } catch (err) {
-      console.log("Notification fetch error:", err?.message || err);
+      console.log("❌ Notification fetch error:", err?.response?.data || err.message);
     } finally {
       setLoadingNotifs(false);
     }
@@ -74,7 +73,7 @@ const Navbar = () => {
       const res = await getUnreadCount(token);
       setUnreadCount(res?.data?.unread || 0);
     } catch (err) {
-      console.log("Unread count error:", err?.message || err);
+      console.log("❌ Unread count error:", err?.response?.data || err.message);
     }
   };
 
@@ -82,10 +81,10 @@ const Navbar = () => {
     if (!token) return;
     try {
       await markAllRead(token);
-      fetchNotifications();
-      fetchUnread();
+      await fetchNotifications();
+      await fetchUnread();
     } catch (err) {
-      console.log("Mark all read error:", err?.message || err);
+      console.log("❌ Mark all read error:", err?.response?.data || err.message);
     }
   };
 
@@ -93,10 +92,10 @@ const Navbar = () => {
     if (!token || !id) return;
     try {
       await markOneRead(token, id);
-      fetchNotifications();
-      fetchUnread();
+      await fetchNotifications();
+      await fetchUnread();
     } catch (err) {
-      console.log("Mark read error:", err?.message || err);
+      console.log("❌ Mark read error:", err?.response?.data || err.message);
     }
   };
 
@@ -104,10 +103,10 @@ const Navbar = () => {
     if (!token || !id) return;
     try {
       await deleteOneNotification(token, id);
-      fetchNotifications();
-      fetchUnread();
+      await fetchNotifications();
+      await fetchUnread();
     } catch (err) {
-      console.log("Delete notification error:", err?.message || err);
+      console.log("❌ Delete notification error:", err?.response?.data || err.message);
     }
   };
 
@@ -115,6 +114,9 @@ const Navbar = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("role");
+
+    socket.disconnect();
+
     navigate("/");
   };
 
@@ -127,22 +129,26 @@ const Navbar = () => {
     // eslint-disable-next-line
   }, [token]);
 
-  // ✅ Socket Real-time Notifications
+  // ✅ Socket realtime notifications
   useEffect(() => {
     if (!token || !userId) return;
 
     socket.emit("join", userId);
 
     const onNewNotification = (notif) => {
+      // ✅ add new at top
       setNotifications((prev) => [notif, ...prev]);
+
+      // ✅ update unread badge count
       setUnreadCount((prev) => prev + 1);
     };
 
     socket.on("newNotification", onNewNotification);
+
     return () => socket.off("newNotification", onNewNotification);
   }, [token, userId]);
 
-  // ✅ Click outside close dropdowns
+  // ✅ close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -206,9 +212,9 @@ const Navbar = () => {
 
   return (
     <nav className="sticky top-0 z-40 w-full bg-white border-b border-blue-200 shadow-sm transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-9xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* ✅ LEFT: LOGO */}
+          {/* ✅ LEFT LOGO */}
           <Link to="/dashboard" className="flex items-center gap-3 group shrink-0">
             <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-white border border-blue-100 flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-300">
               <img
@@ -228,7 +234,7 @@ const Navbar = () => {
             </div>
           </Link>
 
-          {/* ✅ CENTER: DESKTOP MENU */}
+          {/* ✅ CENTER MENU */}
           <div className="hidden lg:flex items-center bg-slate-50/60 rounded-full px-1.5 py-1 border border-slate-200/60 shadow-inner max-w-[60%] mx-auto">
             <div className="flex items-center overflow-x-auto no-scrollbar space-x-1 px-1 py-1 snap-x">
               {menuItems.map((item) => (
@@ -243,8 +249,6 @@ const Navbar = () => {
                   }`}
                 >
                   {item.name}
-
-                  {/* ✅ subtle active glow */}
                   {isActive(item.path) && (
                     <span className="absolute inset-0 rounded-full ring-2 ring-blue-100 pointer-events-none"></span>
                   )}
@@ -253,7 +257,7 @@ const Navbar = () => {
             </div>
           </div>
 
-          {/* ✅ RIGHT: ACTIONS */}
+          {/* ✅ RIGHT ACTIONS */}
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             {/* ✅ Notifications */}
             <div className="relative" ref={notifRef}>
@@ -274,7 +278,7 @@ const Navbar = () => {
               >
                 <Bell size={20} strokeWidth={2} />
 
-                {/* ✅ Unread Dot */}
+                {/* ✅ Unread dot */}
                 {unreadCount > 0 && (
                   <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -283,9 +287,9 @@ const Navbar = () => {
                 )}
               </button>
 
-              {/* ✅ Notifications Dropdown */}
+              {/* Dropdown */}
               {showNotifications && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl shadow-slate-200/70 border border-slate-100 z-50 overflow-hidden animate-dropdown">
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl shadow-slate-200/70 border border-slate-100 z-50 overflow-hidden">
                   <div className="p-4 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                       <Bell size={16} /> Notifications
@@ -327,11 +331,7 @@ const Navbar = () => {
                             )}
 
                             <div className="flex-1">
-                              <p
-                                className={`text-sm font-semibold mb-1 ${
-                                  n.isRead ? "text-slate-700" : "text-slate-900"
-                                }`}
-                              >
+                              <p className="text-sm font-semibold mb-1 text-slate-900">
                                 {n.title}
                               </p>
 
@@ -408,10 +408,8 @@ const Navbar = () => {
                 />
               </button>
 
-              {/* ✅ Profile Dropdown */}
               {showProfileDropdown && (
-                <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl shadow-slate-200/70 border border-slate-100 z-50 overflow-hidden animate-dropdown">
-                  {/* Top Info */}
+                <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl shadow-slate-200/70 border border-slate-100 z-50 overflow-hidden">
                   <div className="px-6 py-5 bg-slate-50/60 border-b border-slate-100">
                     <Link to="/profile" onClick={() => setShowProfileDropdown(false)}>
                       <p className="text-sm font-bold text-slate-800 truncate hover:text-blue-600 transition">
@@ -424,9 +422,7 @@ const Navbar = () => {
                     </p>
                   </div>
 
-                  {/* Actions */}
                   <div className="p-2 space-y-1">
-                    {/* ✅ KYC Verify */}
                     {(role === "admin" || role === "hr") && (
                       <button
                         onClick={() => {
@@ -439,13 +435,9 @@ const Navbar = () => {
                           <ShieldCheck size={18} />
                           <span>KYC Verify</span>
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-500">
-                          Panel
-                        </span>
                       </button>
                     )}
 
-                    {/* ✅ Missing KYC (Perfect Align ✅) */}
                     {(role === "admin" || role === "hr") && (
                       <button
                         onClick={() => {
@@ -458,14 +450,22 @@ const Navbar = () => {
                           <GrDocumentMissing size={18} className="shrink-0" />
                           <span className="leading-none">Missing KYC</span>
                         </div>
-
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg border border-orange-200 bg-orange-50 text-orange-600 shrink-0">
-                          List
-                        </span>
                       </button>
                     )}
 
-                    {/* ✅ Logout */}
+                    <button
+                      onClick={() => {
+                        setShowProfileDropdown(false);
+                        navigate("/chat");
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <TiMessages size={18} className="shrink-0" />
+                        <span className="leading-none">Chat System</span>
+                      </div>
+                    </button>
+
                     <button
                       onClick={handleLogout}
                       className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl transition-colors"
@@ -490,7 +490,7 @@ const Navbar = () => {
 
       {/* ✅ MOBILE MENU */}
       {mobileMenu && (
-        <div className="lg:hidden bg-white border-b border-slate-200 shadow-xl animate-slideDown">
+        <div className="lg:hidden bg-white border-b border-slate-200 shadow-xl">
           <div className="px-4 py-6 space-y-2 max-w-7xl mx-auto">
             {menuItems.map((item) => (
               <Link
@@ -514,32 +514,13 @@ const Navbar = () => {
         </div>
       )}
 
-      {/* ✅ STYLE */}
       <style>{`
-        @keyframes dropdown {
-          from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        .animate-dropdown {
-          animation: dropdown 0.18s ease-out;
-          transform-origin: top right;
-        }
-        .animate-slideDown {
-          animation: slideDown 0.18s ease-out;
-        }
-
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background-color: #cbd5e1;
           border-radius: 20px;
         }
-
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>

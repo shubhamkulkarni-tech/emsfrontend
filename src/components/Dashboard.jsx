@@ -303,7 +303,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-800">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="w-full max-w-9xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         {/* ✅ Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
