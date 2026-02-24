@@ -241,7 +241,7 @@ const Employees = () => {
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-linear-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center text-slate-600 font-black text-sm shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform overflow-hidden shadow-sm">
                               {emp.profileImage ? (
-                                <img src={`http://localhost:5000${emp.profileImage}`} className="w-full h-full object-cover" />
+                                <img src={`https://erp-backend-t90s.onrender.com${emp.profileImage}`} className="w-full h-full object-cover" />
                               ) : emp.name?.charAt(0).toUpperCase()}
                             </div>
                             <div>
@@ -376,7 +376,7 @@ function StatCard({ label, value, icon, color }) {
 }
 
 const FiActivity = (props) => (
-  <svg fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" {...props}>
+  <svg fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" height="1em" width="1em" xmlns="https://backend-node-5ylk.onrender.com/svg" {...props}>
     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
   </svg>
 );

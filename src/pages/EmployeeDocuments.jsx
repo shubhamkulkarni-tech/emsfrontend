@@ -17,7 +17,7 @@ import {
   FiAlertTriangle,
 } from "react-icons/fi";
 
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL = "https://backend-node-5ylk.onrender.com";
 
 const EmployeeDocuments = () => {
   const navigate = useNavigate();

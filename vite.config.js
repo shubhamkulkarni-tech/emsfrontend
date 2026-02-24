@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       // Forward /api requests to local backend
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://backend-node-5ylk.onrender.com',
         changeOrigin: true,
         secure: false,
       }

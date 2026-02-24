@@ -2,7 +2,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: "https://backend-node-5ylk.onrender.com/api",
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'

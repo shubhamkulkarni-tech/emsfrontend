@@ -76,7 +76,7 @@ const ProfilePage = () => {
               <div className="relative w-44 h-44 rounded-[2.5rem] bg-white border-4 border-white overflow-hidden shadow-2xl flex items-center justify-center ring-1 ring-slate-100 ring-offset-4 ring-offset-white">
                 {user.profileImage ? (
                   <img
-                    src={`http://localhost:5000${user.profileImage}`}
+                    src={`https://backend-node-5ylk.onrender.com${user.profileImage}`}
                     alt="Profile"
                     className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                   />

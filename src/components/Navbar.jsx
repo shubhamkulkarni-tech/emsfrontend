@@ -295,7 +295,7 @@ const Navbar = () => {
                 <div className="relative">
                   {profileImage ? (
                     <img
-                      src={`http://localhost:5000${profileImage}`}
+                      src={`https://backend-node-5ylk.onrender.com${profileImage}`}
                       alt="Profile"
                       className="w-8 h-8 rounded shadow-sm object-cover grayscale-20"
                     />
@@ -314,7 +314,7 @@ const Navbar = () => {
                   <div className="px-4 py-4 bg-slate-50/50 border-b border-slate-200">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded bg-slate-200 flex items-center justify-center text-slate-500 font-bold overflow-hidden">
-                        {profileImage ? <img src={`http://localhost:5000${profileImage}`} className="w-full h-full object-cover" /> : name?.charAt(0)}
+                        {profileImage ? <img src={`https://backend-node-5ylk.onrender.com${profileImage}`} className="w-full h-full object-cover" /> : name?.charAt(0)}
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-800 truncate">{name}</p>

@@ -229,7 +229,7 @@ const EditEmployee = () => {
                       {imagePreview ? (
                         <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                       ) : profileImage ? (
-                        <img src={`http://localhost:5000${profileImage}`} alt={formData.name} className="w-full h-full object-cover" />
+                        <img src={`https://backend-node-5ylk.onrender.com${profileImage}`} alt={formData.name} className="w-full h-full object-cover" />
                       ) : (
                         <FiUser className="text-slate-200" size={48} />
                       )}
