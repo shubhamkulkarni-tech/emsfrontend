@@ -1,16 +1,16 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../api/api";
 import Logo from "../../assets/logo.png";
 import {
   FiLock,
-  FiBriefcase,
   FiEye,
   FiEyeOff,
   FiArrowRight,
 } from "react-icons/fi";
 import { FaRegUser } from "react-icons/fa6";
-import { LuUsers } from "react-icons/lu";
+import { getErrorMessage } from "../../utils/errorUtils";
+import { toast } from "react-toastify";
 
 const Login = () => {
   const [employeeId, setEmployeeId] = useState("");
@@ -18,18 +18,16 @@ const Login = () => {
   const [role, setRole] = useState("employee");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
 
     try {
-      const res = await axios.post(
-        "https://emsbackend-2w9c.onrender.com/api/users/login",
+      const res = await api.post(
+        "/users/login",
         {
           employeeId,
           password,
@@ -41,124 +39,86 @@ const Login = () => {
       localStorage.setItem("role", res.data.user.role);
       localStorage.setItem("user", JSON.stringify(res.data.user));
 
+      toast.success(`Welcome back, ${res.data.user.name}!`);
       navigate("/dashboard");
     } catch (err) {
-      console.error(err);
-      setError(
-        err.response?.data?.message ||
-          "Login failed. Please check your credentials."
-      );
+      const msg = getErrorMessage(err);
+      toast.error(msg);
       setLoading(false);
     }
   };
 
   return (
-    <div
-      className="min-h-screen flex flex-col font-sans relative overflow-hidden"
-      style={{
-        background:
-          "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 45%, #93c5fd 100%)",
-      }}
-    >
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center p-4 md:p-8 overflow-x-hidden">
-        {/* ✅ CARD SIZE SMALLER (WIDTH + HEIGHT) */}
-        <div className="flex w-full max-w-3xl min-h-[520px] bg-white rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden transform transition-all duration-500">
-          {/* Left Section: Login Form */}
-          <div className="w-full md:w-3/5 p-7 md:p-9 flex flex-col justify-center">
-            <div className="mb-7 flex items-center justify-center">
-              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center animate-[bounce_1s_infinite] hover:scale-110 transition-transform duration-300">
-                <img
-                  src={Logo}
-                  alt="Company Logo"
-                  className="w-9 h-9 object-contain"
-                />
+    <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-[900px] flex bg-white rounded-xl shadow-xl shadow-slate-200/40 overflow-hidden border border-slate-200">
+          
+          {/* Form Side */}
+          <div className="w-full md:w-[55%] p-8 md:p-12 flex flex-col">
+            <div className="flex items-center gap-3 mb-10">
+              <div className="w-12 h-12 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
+                <img src={Logo} alt="Logo" className="w-10 h-10 object-contain" />
               </div>
+              <span className="text-xl font-bold text-slate-900 tracking-tight">Wordlane Tech</span>
             </div>
 
-            <h1 className="text-3xl font-bold text-slate-800 tracking-tight text-center mb-2">
-              Welcome Back
-            </h1>
-            <p className="text-slate-500 text-center text-sm mb-7">
-              Please sign in to your account
-            </p>
+            <div className="mb-8">
+              <h1 className="text-2xl font-bold text-slate-900 mb-2">Sign in to ERP</h1>
+              <p className="text-sm text-slate-500">Enter your credentials to access your dashboard</p>
+            </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium mb-6">
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Employee ID */}
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
-                  Employee ID
-                </label>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Employee ID</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
-                    <FaRegUser size={18} />
-                  </span>
+                  <FaRegUser className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-4" />
                   <input
                     type="text"
+                    required
                     value={employeeId}
                     onChange={(e) => setEmployeeId(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    placeholder="Enter Employee ID"
-                    required
+                    placeholder="E.g. EMP1234"
+                    className="erp-input pl-10 h-11"
                   />
                 </div>
               </div>
 
-              {/* Password */}
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
-                  Password
-                </label>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Password</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
-                    <FiLock size={18} />
-                  </span>
+                  <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-4" />
                   <input
                     type={showPassword ? "text" : "password"}
+                    required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    placeholder="Enter Password"
-                    required
+                    placeholder="••••••••"
+                    className="erp-input pl-10 h-11"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    {showPassword ? (
-                      <FiEyeOff size={18} />
-                    ) : (
-                      <FiEye size={18} />
-                    )}
+                    {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
                   </button>
                 </div>
               </div>
 
-              {/* Role Selection */}
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">
-                  Login As
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {["admin", "employee", "hr", "manager"].map((r) => (
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Workspace Role</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["employee", "manager", "hr", "admin"].map((r) => (
                     <button
                       key={r}
                       type="button"
                       onClick={() => setRole(r)}
-                      className={`px-4 py-2.5 rounded-xl border font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow-md ${
+                      className={`h-10 px-3 rounded-md border text-sm font-medium transition-all ${
                         role === r
-                          ? "bg-blue-600 text-white border-blue-600 shadow-md hover:shadow-lg"
-                          : "bg-slate-50 text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-slate-100"
+                          ? "bg-slate-900 border-slate-900 text-white shadow-sm"
+                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                       }`}
                     >
-                      <LuUsers size={16} />
                       {r.charAt(0).toUpperCase() + r.slice(1)}
                     </button>
                   ))}
@@ -168,132 +128,49 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-blue-200 flex items-center justify-center gap-2 mt-4"
+                className="w-full erp-button-primary h-11 flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? (
-                  <svg
-                    className="animate-spin h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    <span>Sign In</span>
-                    <FiArrowRight size={18} />
+                    <span>Continue to Workspace</span>
+                    <FiArrowRight />
                   </>
                 )}
               </button>
             </form>
 
-            <div className="text-center mt-5">
-              <p className="text-sm text-slate-500">Don't have an account?</p>
-              <button className="text-sm font-bold text-blue-600 hover:text-blue-700 hover:underline">
-                Contact HR
-              </button>
+            <div className="mt-10 pt-8 border-t border-slate-100">
+              <p className="text-xs text-slate-500 text-center">
+                Need help accessing your account? <button className="text-blue-600 font-semibold hover:underline">Contact Support</button>
+              </p>
             </div>
           </div>
 
-          {/* Right Section: Decorative */}
-          <div className="hidden md:flex w-2/5 bg-gradient-to-br from-blue-600 to-indigo-700 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-            <div className="absolute inset-0 bg-black opacity-20"></div>
-
-            <div className="relative z-10 h-full flex flex-col justify-center items-center p-10 text-white text-center">
-              <div className="bg-white/10 backdrop-blur-sm p-7 rounded-2xl border border-white/20 mb-7">
-                <img
-                  src={Logo}
-                  alt="Logo"
-                  className="w-20 h-auto mx-auto mb-4 opacity-90"
-                />
-                <h2 className="text-2xl font-bold tracking-tight">
-                  Wordlane Tech
-                </h2>
-                <p className="text-blue-100 text-sm opacity-80 mt-2">
-                  Employee Management System
-                </p>
-              </div>
-
-              <div className="space-y-5 max-w-md mx-auto">
-                <div className="flex items-center gap-3 text-blue-100">
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                    ></path>
-                  </svg>
-                  <span className="text-sm font-medium">Secure Login</span>
-                </div>
-
-                <div className="flex items-center gap-3 text-blue-100">
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    ></path>
-                  </svg>
-                  <span className="text-sm font-medium">Fast Access</span>
-                </div>
-
-                <div className="flex items-center gap-3 text-blue-100">
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"
-                    ></path>
-                  </svg>
-                  <span className="text-sm font-medium">24/7 Support</span>
-                </div>
-              </div>
+          {/* Decorative Side */}
+          <div className="hidden md:flex md:w-[45%] bg-slate-900 relative p-12 flex-col justify-end">
+            <div className="absolute top-0 right-0 p-24 opacity-20 pointer-events-none">
+               <div className="w-64 h-64 border-40 border-slate-700 rounded-full" />
             </div>
-
-            {/* Decorative Circles */}
-            <div className="absolute -top-10 -left-10 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
-            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+            
+            <div className="relative z-10">
+              <div className="w-12 h-1 bg-blue-500 mb-6" />
+              <h2 className="text-3xl font-bold text-white mb-4 leading-tight">Secure Enterprise Portal</h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Experience streamlined resource management and enterprise-grade security within a centralized workflow.
+              </p>
+            </div>
+            
+            <div className="absolute bottom-12 right-12 text-slate-700 font-mono text-[10px] uppercase tracking-[0.2em] pointer-events-none">
+              v2.4.0-STABLE
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="mt-auto bg-white border-t border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 py-4 text-center text-sm text-slate-500">
-          &copy; 2025 Company Name. All rights reserved.
-        </div>
+      <div className="p-6 text-center">
+        <p className="text-[10px] text-slate-400 uppercase tracking-widest">&copy; 2025 Wordlane Tech. All rights reserved.</p>
       </div>
     </div>
   );

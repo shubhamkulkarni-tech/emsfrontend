@@ -1,10 +1,8 @@
-import { socket } from "../socket";
 import React, { useEffect, useState, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import CompanyLogo from "../assets/logo.png";
 import { GrDocumentMissing } from "react-icons/gr";
-import { Bell, Menu, X, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
-import { TiMessages } from "react-icons/ti";
+import { Bell, Menu, X, ChevronDown, LogOut, ShieldCheck, Search, HelpCircle, User, Network } from "lucide-react";
 
 import {
   getMyNotifications,
@@ -110,43 +108,22 @@ const Navbar = () => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
-
-    socket.disconnect();
-
-    navigate("/");
-  };
-
   // ✅ Initial Load
   useEffect(() => {
     if (token) {
       fetchNotifications();
       fetchUnread();
     }
-    // eslint-disable-next-line
   }, [token]);
 
-  // ✅ Socket realtime notifications
-  useEffect(() => {
-    if (!token || !userId) return;
+  // ✅ Logout Handler (removed socket.disconnect)
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("role");
 
-    socket.emit("join", userId);
-
-    const onNewNotification = (notif) => {
-      // ✅ add new at top
-      setNotifications((prev) => [notif, ...prev]);
-
-      // ✅ update unread badge count
-      setUnreadCount((prev) => prev + 1);
-    };
-
-    socket.on("newNotification", onNewNotification);
-
-    return () => socket.off("newNotification", onNewNotification);
-  }, [token, userId]);
+    navigate("/");
+  };
 
   // ✅ close dropdowns on outside click
   useEffect(() => {
@@ -163,368 +140,246 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ✅ Menu Items
+  // ✅ Menu Items - Grouped and Cleaned
   const menuItems = [
-    { name: "Dashboard", path: "/dashboard" },
-
-    ...(role === "admin"
-      ? [
-          { name: "Employees", path: "/employees" },
-          { name: "Team", path: "/team" },
-          { name: "Projects", path: "/projects" },
-          { name: "Tickets", path: "/tasks" },
-          { name: "Attendance", path: "/attendance" },
-          { name: "Leaves", path: "/leave" },
-        ]
-      : []),
-
-    ...(role === "manager"
-      ? [
-          { name: "Team", path: "/team" },
-          { name: "Projects", path: "/projects" },
-          { name: "Tickets", path: "/tasks" },
-          { name: "Attendance", path: "/attendance" },
-          { name: "Leaves", path: "/leave" },
-        ]
-      : []),
-
-    ...(role === "hr"
-      ? [
-          { name: "Employees", path: "/employees" },
-          { name: "Team", path: "/team" },
-          { name: "Attendance", path: "/attendance" },
-          { name: "Leaves", path: "/leave" },
-        ]
-      : []),
-
-    ...(role === "employee"
-      ? [
-          { name: "Team", path: "/team" },
-          { name: "Projects", path: "/projects" },
-          { name: "Tickets", path: "/tasks" },
-          { name: "Attendance", path: "/attendance" },
-          { name: "Leaves", path: "/leave" },
-        ]
-      : []),
+    { name: "Overview", path: "/dashboard" },
+    ...(role === "admin" || role === "hr" ? [{ name: "Personnel", path: "/employees" }] : []),
+    { name: "Projects", path: "/projects" },
+    { name: "Tasks", path: "/tasks" },
+    { name: "Presence", path: "/attendance" },
+    { name: "Leave", path: "/leave" },
+    ...(role === "admin" || role === "hr" ? [{ name: "Payroll", path: "/payroll" }] : []),
   ];
 
   const isActive = (path) => location.pathname === path;
 
   return (
-    <nav className="sticky top-0 z-40 w-full bg-white border-b border-blue-200 shadow-sm transition-all duration-300">
-      <div className="max-w-9xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* ✅ LEFT LOGO */}
-          <Link to="/dashboard" className="flex items-center gap-3 group shrink-0">
-            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-white border border-blue-100 flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-300">
-              <img
-                src={CompanyLogo}
-                alt="Logo"
-                className="w-6 h-6 object-contain transition-transform duration-300 group-hover:scale-110"
-              />
-            </div>
+    <header className="sticky top-0 z-40 w-full bg-white border-b border-slate-200 shadow-sm transition-all duration-200">
+      <div className="max-w-[1600px] mx-auto px-4 md:px-6">
+        <div className="flex justify-between items-center h-14">
+          
+          {/* Logo Section */}
+          <div className="flex items-center gap-8 shrink-0">
+            <Link to="/dashboard" className="flex items-center gap-2.5">
+              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shadow-lg border border-slate-200 overflow-hidden">
+                <img src={CompanyLogo} alt="Logo" className="w-8 h-8 object-contain" />
+              </div>
+              <span className="text-lg font-bold text-slate-900 tracking-tight hidden sm:block">Wordlane Tech</span>
+            </Link>
 
-            <div className="flex flex-col leading-none">
-              <span className="text-lg font-bold text-slate-800 tracking-tight group-hover:text-blue-600 transition-colors">
-                Wordlane
-              </span>
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-0.5">
-                Tech
-              </span>
-            </div>
-          </Link>
-
-          {/* ✅ CENTER MENU */}
-          <div className="hidden lg:flex items-center bg-slate-50/60 rounded-full px-1.5 py-1 border border-slate-200/60 shadow-inner max-w-[60%] mx-auto">
-            <div className="flex items-center overflow-x-auto no-scrollbar space-x-1 px-1 py-1 snap-x">
+            {/* Desktop Navigation */}
+            <nav className="hidden lg:flex items-center gap-1">
               {menuItems.map((item) => (
                 <Link
                   key={item.name}
                   to={item.path}
-                  className={`relative px-5 py-2 text-sm font-medium rounded-full transition-all duration-200 shrink-0 snap-start whitespace-nowrap
-                  ${
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                     isActive(item.path)
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
-                      : "text-slate-600 hover:text-blue-600 hover:bg-white hover:shadow-sm"
+                      ? "bg-slate-100 text-slate-900"
+                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
                   {item.name}
-                  {isActive(item.path) && (
-                    <span className="absolute inset-0 rounded-full ring-2 ring-blue-100 pointer-events-none"></span>
-                  )}
                 </Link>
               ))}
+            </nav>
+          </div>
+
+          {/* Search Bar - ERP Standard */}
+          <div className="hidden md:flex flex-1 max-w-md mx-8">
+            <div className="relative w-full group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-4 group-focus-within:text-blue-500 transition-colors" />
+              <input 
+                type="text" 
+                placeholder="Search modules, tasks, or users..." 
+                className="w-full h-9 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-md text-sm focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 focus:border-slate-300 transition-all"
+              />
             </div>
           </div>
 
-          {/* ✅ RIGHT ACTIONS */}
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            {/* ✅ Notifications */}
+          {/* Action Icons */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="p-2 text-slate-500 hover:bg-slate-50 rounded-md transition-colors relative hidden sm:block">
+              <HelpCircle size={20} />
+            </button>
+
+            {/* Notifications Dropdown */}
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => {
-                  setShowNotifications((prev) => !prev);
+                  setShowNotifications(!showNotifications);
                   if (!showNotifications) {
                     fetchNotifications();
                     fetchUnread();
                   }
                 }}
-                className={`relative p-2.5 rounded-full transition-all duration-200 active:scale-95
-                ${
-                  showNotifications
-                    ? "bg-blue-50 text-blue-600 ring-2 ring-blue-100 shadow-sm"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-blue-600"
+                className={`p-2 rounded-md transition-all relative ${
+                  showNotifications ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <Bell size={20} strokeWidth={2} />
-
-                {/* ✅ Unread dot */}
+                <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border-2 border-white"></span>
+                  <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                   </span>
                 )}
               </button>
 
-              {/* Dropdown */}
               {showNotifications && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl shadow-slate-200/70 border border-slate-100 z-50 overflow-hidden">
-                  <div className="p-4 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                      <Bell size={16} /> Notifications
-                    </h3>
-
+                <div className="absolute right-0 mt-2 w-[350px] bg-white rounded-lg shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <span className="text-sm font-bold text-slate-800">Notifications</span>
                     {unreadCount > 0 && (
-                      <button
-                        onClick={handleMarkAllRead}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
-                      >
-                        Mark all
+                      <button onClick={handleMarkAllRead} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+                        Mark all read
                       </button>
                     )}
                   </div>
 
-                  <div className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                  <div className="max-h-[400px] overflow-y-auto">
                     {loadingNotifs ? (
-                      <p className="p-4 text-center text-sm text-slate-500 animate-pulse">
-                        Loading...
-                      </p>
+                      <div className="p-8 text-center text-xs text-slate-400 animate-pulse">Synchronizing...</div>
                     ) : notifications.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-                        <Bell size={32} className="mb-2 opacity-20" />
-                        <p className="text-sm">No new notifications</p>
+                      <div className="p-12 text-center text-slate-400">
+                        <Bell size={24} className="mx-auto mb-2 opacity-20" />
+                        <p className="text-xs font-medium">System fully updated</p>
                       </div>
                     ) : (
-                      notifications.map((n) => (
-                        <div
-                          key={n._id}
-                          className={`p-3 rounded-xl border transition-all duration-200 hover:shadow-sm ${
-                            n.isRead
-                              ? "bg-white border-slate-100 hover:border-slate-200"
-                              : "bg-blue-50/50 border-blue-100 hover:bg-blue-50"
-                          }`}
-                        >
-                          <div className="flex gap-3">
-                            {!n.isRead && (
-                              <div className="w-2 h-2 mt-2 rounded-full bg-blue-600 shrink-0"></div>
-                            )}
-
-                            <div className="flex-1">
-                              <p className="text-sm font-semibold mb-1 text-slate-900">
-                                {n.title}
-                              </p>
-
-                              <p className="text-xs text-slate-500 leading-relaxed mb-2">
-                                {n.message}
-                              </p>
-
-                              <div className="flex items-center gap-2 mb-1">
-                                {!n.isRead && (
-                                  <button
-                                    onClick={() => handleMarkRead(n._id)}
-                                    className="text-[10px] font-bold uppercase px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 shadow-sm active:scale-95 transition"
-                                  >
-                                    Read
-                                  </button>
-                                )}
-
-                                <button
-                                  onClick={() => handleDeleteNotif(n._id)}
-                                  className="text-[10px] font-bold uppercase px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 active:scale-95 transition"
-                                >
-                                  Delete
-                                </button>
+                      <div className="divide-y divide-slate-100">
+                        {notifications.map((n) => (
+                          <div
+                            key={n._id}
+                            className={`p-4 transition-colors hover:bg-slate-50 group ${!n.isRead ? "bg-blue-50/30" : ""}`}
+                          >
+                            <div className="flex gap-3">
+                              <div className="flex-1">
+                                <div className="flex justify-between items-start mb-1">
+                                  <p className="text-xs font-bold text-slate-900">{n.title}</p>
+                                  <span className="text-[10px] text-slate-400 font-medium">
+                                    {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 leading-normal line-clamp-2">{n.message}</p>
+                                <div className="mt-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {!n.isRead && (
+                                    <button onClick={() => handleMarkRead(n._id)} className="text-[10px] font-bold text-blue-600 uppercase tracking-wider hover:underline">Read</button>
+                                  )}
+                                  <button onClick={() => handleDeleteNotif(n._id)} className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hover:text-red-500 transition-colors">Dismiss</button>
+                                </div>
                               </div>
-
-                              <p className="text-[10px] text-slate-400 font-medium">
-                                {new Date(n.createdAt).toLocaleString()}
-                              </p>
                             </div>
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ✅ Profile */}
+            <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block" />
+
+            {/* Profile Section */}
             <div className="relative" ref={profileRef}>
               <button
-                onClick={() => setShowProfileDropdown((prev) => !prev)}
-                className="flex items-center gap-2 sm:gap-3 p-1 pr-2.5 rounded-full hover:bg-slate-100 transition-all duration-200 border border-transparent hover:border-slate-200 group active:scale-[0.98]"
+                onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                className={`flex items-center gap-2 p-1 pl-2 rounded-md transition-all ${
+                  showProfileDropdown ? "bg-slate-100" : "hover:bg-slate-50"
+                }`}
               >
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-bold text-slate-800 leading-none mb-1">{name}</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">{role}</p>
+                </div>
                 <div className="relative">
                   {profileImage ? (
                     <img
-                      src={`https://emsbackend-2w9c.onrender.com${profileImage}`}
+                      src={`http://localhost:5000${profileImage}`}
                       alt="Profile"
-                      className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm"
+                      className="w-8 h-8 rounded shadow-sm object-cover grayscale-20"
                     />
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white flex items-center justify-center border-2 border-white shadow-sm font-bold text-sm">
-                      {name?.charAt(0).toUpperCase() || "U"}
+                    <div className="w-8 h-8 rounded bg-slate-800 text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                      {name?.charAt(0)}
                     </div>
                   )}
-
-                  <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white bg-green-400"></span>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></span>
                 </div>
-
-                <div className="hidden sm:block text-left">
-                  <p className="text-sm font-semibold text-slate-700 leading-none">
-                    {name || "User"}
-                  </p>
-                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mt-0.5">
-                    {role}
-                  </p>
-                </div>
-
-                <ChevronDown
-                  className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                    showProfileDropdown ? "rotate-180" : ""
-                  }`}
-                />
+                <ChevronDown size={14} className={`text-slate-400 transition-transform ${showProfileDropdown ? "rotate-180" : ""}`} />
               </button>
 
               {showProfileDropdown && (
-                <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl shadow-slate-200/70 border border-slate-100 z-50 overflow-hidden">
-                  <div className="px-6 py-5 bg-slate-50/60 border-b border-slate-100">
-                    <Link to="/profile" onClick={() => setShowProfileDropdown(false)}>
-                      <p className="text-sm font-bold text-slate-800 truncate hover:text-blue-600 transition">
-                        {name}
-                      </p>
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="px-4 py-4 bg-slate-50/50 border-b border-slate-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded bg-slate-200 flex items-center justify-center text-slate-500 font-bold overflow-hidden">
+                        {profileImage ? <img src={`http://localhost:5000${profileImage}`} className="w-full h-full object-cover" /> : name?.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 truncate">{name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono">{employeeId}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-1">
+                    <Link to="/profile" onClick={() => setShowProfileDropdown(false)} className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded transition-colors">
+                      <User size={16} className="text-slate-400" /> My Profile
                     </Link>
 
-                    <p className="text-xs text-slate-500 font-mono mt-1 bg-slate-100 inline-block px-1.5 py-0.5 rounded">
-                      {employeeId || "ID: N/A"}
-                    </p>
+                    {(role === "admin" || role === "hr") && (
+                      <>
+                        <div className="h-px bg-slate-100 my-1 mx-2" />
+                        <Link to="/admin/onboarding-documents" onClick={() => setShowProfileDropdown(false)} className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded transition-colors">
+                          <ShieldCheck size={16} className="text-slate-400" /> Document Verification
+                        </Link>
+                        <Link to="/admin/missing-documents" onClick={() => setShowProfileDropdown(false)} className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded transition-colors">
+                          <GrDocumentMissing size={16} className="text-slate-400" /> Compliance Audit
+                        </Link>
+                      </>
+                    )}
                   </div>
-
-                  <div className="p-2 space-y-1">
-                    {(role === "admin" || role === "hr") && (
-                      <button
-                        onClick={() => {
-                          setShowProfileDropdown(false);
-                          navigate("/admin/kyc");
-                        }}
-                        className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck size={18} />
-                          <span>KYC Verify</span>
-                        </div>
-                      </button>
-                    )}
-
-                    {(role === "admin" || role === "hr") && (
-                      <button
-                        onClick={() => {
-                          setShowProfileDropdown(false);
-                          navigate("/admin/missing-kyc");
-                        }}
-                        className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <GrDocumentMissing size={18} className="shrink-0" />
-                          <span className="leading-none">Missing KYC</span>
-                        </div>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => {
-                        setShowProfileDropdown(false);
-                        navigate("/chat");
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <TiMessages size={18} className="shrink-0" />
-                        <span className="leading-none">Chat System</span>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl transition-colors"
-                    >
-                      <LogOut size={18} /> Logout
+                  <div className="p-1 mt-1 border-t border-slate-100">
+                    <button onClick={handleLogout} className="flex items-center gap-3 w-full px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded transition-colors">
+                      <LogOut size={16} /> Sign Out
                     </button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ✅ Mobile Toggle */}
+            {/* Mobile Menu Toggle */}
             <button
-              className="lg:hidden p-2.5 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors active:scale-95"
-              onClick={() => setMobileMenu((prev) => !prev)}
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-colors"
+              onClick={() => setMobileMenu(!mobileMenu)}
             >
-              {mobileMenu ? <X size={24} /> : <Menu size={24} />}
+              {mobileMenu ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ✅ MOBILE MENU */}
+      {/* Mobile Navigation */}
       {mobileMenu && (
-        <div className="lg:hidden bg-white border-b border-slate-200 shadow-xl">
-          <div className="px-4 py-6 space-y-2 max-w-7xl mx-auto">
+        <div className="lg:hidden bg-white border-t border-slate-200 py-2 shadow-xl animate-in fade-in slide-in-from-top-1">
+          <div className="px-4 flex flex-col gap-1">
             {menuItems.map((item) => (
               <Link
                 key={item.name}
                 to={item.path}
                 onClick={() => setMobileMenu(false)}
-                className={`block px-5 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-between group ${
-                  isActive(item.path)
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-200"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-blue-600"
+                className={`px-4 py-2 text-sm font-semibold rounded-md flex items-center justify-between group ${
+                  isActive(item.path) ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                <span>{item.name}</span>
-                <ChevronDown
-                  size={16}
-                  className={isActive(item.path) ? "" : "opacity-0 group-hover:opacity-50"}
-                />
+                {item.name}
+                <ChevronDown size={14} className={`-rotate-90 opacity-40 group-hover:opacity-100 transition-all ${isActive(item.path) ? "opacity-100" : ""}`} />
               </Link>
             ))}
           </div>
         </div>
       )}
-
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #cbd5e1;
-          border-radius: 20px;
-        }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
-    </nav>
+    </header>
   );
 };
 

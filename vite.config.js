@@ -6,11 +6,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // This tells Vite: "Any request starting with /api, forward it to my Render backend"
+      // Forward /api requests to local backend
       '/api': {
-        target: 'https://emsbackend-2w9c.onrender.com',
+        target: 'http://localhost:5000',
         changeOrigin: true,
-        secure: true, // set to true if using https
+        secure: false,
       }
     }
   }

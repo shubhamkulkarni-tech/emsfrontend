@@ -1,6 +1,4 @@
-import axios from "axios";
-
-const BASE_URL = "https://emsbackend-2w9c.onrender.com/api/notifications";
+import api from "./api";
 
 const getTokenHeader = (token) => ({
   headers: {
@@ -10,25 +8,25 @@ const getTokenHeader = (token) => ({
 
 // ✅ My Notifications
 export const getMyNotifications = (token, page = 1, limit = 10) => {
-  return axios.get(`${BASE_URL}/my?page=${page}&limit=${limit}`, getTokenHeader(token));
+  return api.get(`/notifications/my?page=${page}&limit=${limit}`, getTokenHeader(token));
 };
 
 // ✅ Unread Count
 export const getUnreadCount = (token) => {
-  return axios.get(`${BASE_URL}/unread-count`, getTokenHeader(token));
+  return api.get(`/notifications/unread-count`, getTokenHeader(token));
 };
 
 // ✅ Mark all read
 export const markAllRead = (token) => {
-  return axios.put(`${BASE_URL}/read-all`, {}, getTokenHeader(token));
+  return api.put(`/notifications/read-all`, {}, getTokenHeader(token));
 };
 
 // ✅ Mark one read
 export const markOneRead = (token, id) => {
-  return axios.put(`${BASE_URL}/read/${id}`, {}, getTokenHeader(token));
+  return api.put(`/notifications/read/${id}`, {}, getTokenHeader(token));
 };
 
 // ✅ Delete one notification
 export const deleteOneNotification = (token, id) => {
-  return axios.delete(`${BASE_URL}/${id}`, getTokenHeader(token));
+  return api.delete(`/notifications/${id}`, getTokenHeader(token));
 };

@@ -1,52 +1,43 @@
 import React, { useEffect, useState } from "react";
-import API from "../api/axios";
-import { 
-  FiCalendar, FiUser, FiMoreVertical, FiFolder, FiSearch, 
-  FiX, FiBriefcase, FiFilter, FiEdit, FiTrash2, FiCheckCircle, FiClock
-} from "react-icons/fi";
-
+import { useNavigate } from "react-router-dom";
+import API from "../api/api";
 import Footer from "../components/Footer";
 import Toast from "../components/Toast";
-import { useNavigate } from "react-router-dom";
+import {
+  FiBriefcase, FiCalendar, FiMoreVertical, FiSearch, FiX,
+  FiFilter, FiPlus, FiActivity, FiCheckCircle, FiClock,
+  FiAlertCircle, FiEdit, FiTrash2, FiLayers, FiInfo, FiFolder
+} from "react-icons/fi";
+import { motion, AnimatePresence } from "framer-motion";
+import EmptyState from "../components/EmptyState";
 
-// --- AESTHETIC THEME PALETTE ---
+// ── Status badge styles (Premium) ──────────────────────────────────────────
 const statusColors = {
-  "In Progress": { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", dot: "bg-yellow-500" },
-  "Completed": { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500" },
-  "On Hold": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
-  DEFAULT: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" },
+  "In Progress": { bg: "bg-amber-50 text-amber-700 border-amber-100", dot: "bg-amber-500" },
+  "Completed": { bg: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500" },
+  "On Hold": { bg: "bg-rose-50 text-rose-700 border-rose-100", dot: "bg-rose-500" },
+  DEFAULT: { bg: "bg-slate-50 text-slate-700 border-slate-100", dot: "bg-slate-400" },
 };
 
 const Projects = () => {
-  const [projects, setProjects] = useState([]);
-  const [summary, setSummary] = useState({
-    total: 0,
-    completed: 0,
-    inProgress: 0,
-    onHold: 0,
-  });
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [teamFilter, setTeamFilter] = useState("");
+  const [projects,      setProjects]      = useState([]);
+  const [summary,       setSummary]       = useState({ total: 0, completed: 0, inProgress: 0, onHold: 0 });
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState("");
+  const [search,        setSearch]        = useState("");
+  const [statusFilter,  setStatusFilter]  = useState("");
+  const [teamFilter,    setTeamFilter]    = useState("");
   const [managerFilter, setManagerFilter] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [teams, setTeams] = useState([]);
-  const [managers, setManagers] = useState([]);
-  
-  // Dropdown State
-  const [dropdownOpen, setDropdownOpen] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
-  
-  const [userRole, setUserRole] = useState("");
-  const [isHoveringCreateBtn, setIsHoveringCreateBtn] = useState(false);
-  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
-
-  const [page, setPage] = useState(1);
+  const [fromDate,      setFromDate]      = useState("");
+  const [toDate,        setToDate]        = useState("");
+  const [teams,         setTeams]         = useState([]);
+  const [managers,      setManagers]      = useState([]);
+  const [dropdownOpen,  setDropdownOpen]  = useState(null);
+  const [modalOpen,     setModalOpen]     = useState(false);
+  const [deleteId,      setDeleteId]      = useState(null);
+  const [userRole,      setUserRole]      = useState("");
+  const [toast,         setToast]         = useState({ show: false, message: "", type: "success" });
+  const [page,          setPage]          = useState(1);
   const limit = 12;
 
   const navigate = useNavigate();
@@ -54,448 +45,346 @@ const Projects = () => {
   useEffect(() => {
     const role = localStorage.getItem("role") || "";
     setUserRole(role.toLowerCase());
-
-    Promise.all([API.get("/teams"), API.get("/users/managers")])
-      .then(([tRes, mRes]) => {
-        setTeams(tRes.data || []);
-        setManagers(mRes.data || []);
-      })
-      .catch(console.error);
+    API.get("/teams").then(res => setTeams(res.data || [])).catch(() => {});
+    API.get("/users/managers").then(res => setManagers(res.data || [])).catch(() => {});
   }, []);
 
   const fetchProjects = async (p = 1) => {
     setLoading(true);
     setError("");
     try {
-      const params = {
-        page: p,
-        limit,
-        search,
-        status: statusFilter,
-        team: teamFilter,
-        manager: managerFilter,
-        from: fromDate,
-        to: toDate,
-      };
-
-      const res = await API.get("/projects", { params });
+      const res = await API.get("/projects", {
+        params: { page: p, limit, search, status: statusFilter, team: teamFilter, manager: managerFilter, from: fromDate, to: toDate },
+      });
       setProjects(res.data.projects || []);
-      setSummary(res.data.summary || {});
+      setSummary(res.data.summary || { total: 0, completed: 0, inProgress: 0, onHold: 0 });
     } catch (err) {
-      console.error(err);
-      setError("Failed to fetch projects.");
+      console.error("Project Fetch Error:", err);
+      setError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchProjects(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { fetchProjects(1); }, []);
 
-  // Re-fetch when filters change
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      fetchProjects(1);
-    }, 350); // debounce
+    const timer = setTimeout(() => { setPage(1); fetchProjects(1); }, 350);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter, teamFilter, managerFilter, fromDate, toDate]);
 
-  // Click Outside to Close Dropdown
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownOpen && !event.target.closest('.dropdown-actions')) {
-        setDropdownOpen(null);
-      }
+    const handleClickOutside = (e) => {
+      if (dropdownOpen && !e.target.closest(".dropdown-actions")) setDropdownOpen(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownOpen]);
 
   const resetFilters = () => {
-    setSearch("");
-    setStatusFilter("");
-    setTeamFilter("");
-    setManagerFilter("");
-    setFromDate("");
-    setToDate("");
-    setPage(1);
-    fetchProjects(1);
+    setSearch(""); setStatusFilter(""); setTeamFilter("");
+    setManagerFilter(""); setFromDate(""); setToDate("");
+    setPage(1); fetchProjects(1);
   };
 
-  const confirmDelete = (id) => {
-    setDeleteId(id);
-    setModalOpen(true);
-    setDropdownOpen(null);
-  };
+  const confirmDelete = (id) => { setDeleteId(id); setModalOpen(true); setDropdownOpen(null); };
 
   const handleDelete = async () => {
     try {
       await API.delete(`/projects/${deleteId}`);
-      setModalOpen(false);
-      setDeleteId(null);
-      fetchProjects(page);
-      setToast({ 
-        show: true, 
-        message: 'Project deleted successfully!', 
-        type: 'success' 
-      });
-    } catch (err) {
-      console.error(err);
-      setToast({ 
-        show: true, 
-        message: 'Failed to delete project.', 
-        type: 'error' 
-      });
+      setToast({ show: true, message: "Project purged successfully.", type: "success" });
+      setModalOpen(false); setDeleteId(null); fetchProjects(page);
+    } catch {
+      setToast({ show: true, message: "Failed to purge project node.", type: "error" });
     }
   };
 
-  const nextPage = () => {
-    setPage((p) => {
-      const np = p + 1;
-      fetchProjects(np);
-      return np;
-    });
-  };
-
-  const prevPage = () => {
-    setPage((p) => {
-      const np = Math.max(1, p - 1);
-      fetchProjects(np);
-      return np;
-    });
-  };
+  const nextPage = () => setPage((p) => { const np = p + 1; fetchProjects(np); return np; });
+  const prevPage = () => setPage((p) => { const np = Math.max(1, p - 1); fetchProjects(np); return np; });
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans tracking-tight">
       
-
-      <div className="flex-1 p-4 md:p-8 max-w-10xl mx-auto w-full">
+      {/* 🔹 Premium Header Area - Light Theme */}
+      <div className="bg-white pt-10 pb-20 px-4 md:px-8 border-b border-slate-200 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-1/2 h-full bg-linear-to-bl from-blue-500/5 to-transparent opacity-50" />
+        <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl opacity-60" />
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Projects Directory</h1>
-            <p className="text-slate-500 text-sm mt-1">Manage projects, teams, and deadlines</p>
-          </div>
-          
-          <div className="flex gap-3 w-full md:w-auto items-center h-full">
-            <div className="relative w-full md:w-80">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">
-                <FiSearch />
-              </span>
-              <input
-                type="text"
-                placeholder="Search by name or manager..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-
-            {(userRole === "admin" || userRole === "manager") && (
-              <button
-                onClick={() => navigate("/add-project")}
-                onMouseEnter={() => setIsHoveringCreateBtn(true)}
-                onMouseLeave={() => setIsHoveringCreateBtn(false)}
-                style={{
-                  backgroundColor: isHoveringCreateBtn ? 'rgb(255, 172, 28)' : 'rgb(37, 99, 235)', 
-                  color: '#fff',
-                  boxShadow: isHoveringCreateBtn ? '0 10px 15px -3px rgba(255, 172, 28, 0.4)' : '0 10px 15px -3px rgba(37, 99, 235, 0.4)',
-                  transform: isHoveringCreateBtn ? 'translateY(-2px)' : 'translateY(0)'
-                }}
-                className="h-full px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium border border-transparent transition-all duration-300 ease-out"
-              >
-                <FiBriefcase size={18} />
-                <span>Add Project</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        {!loading && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
-                    <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0"><FiFolder size={24} /></div>
-                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Projects</p><p className="text-2xl font-bold text-slate-800">{summary.total}</p></div>
+        <div className="max-w-[1600px] mx-auto relative z-10 w-full">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 backdrop-blur-sm shadow-sm transition-transform hover:scale-105">
+                <FiBriefcase className="text-blue-600 text-3xl" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Project Hub</span>
+                  <div className="h-1 w-1 bg-slate-200 rounded-full" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Initiative Matrix</span>
                 </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
-                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0"><FiCheckCircle size={24} /></div>
-                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Completed</p><p className="text-2xl font-bold text-slate-800">{summary.completed}</p></div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
-                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 shrink-0"><FiClock size={24} /></div>
-                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">In Progress</p><p className="text-2xl font-bold text-slate-800">{summary.inProgress}</p></div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow min-h-[120px]">
-                    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0"><FiClock size={24} /></div>
-                    <div className="flex flex-col justify-center"><p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">On Hold</p><p className="text-2xl font-bold text-slate-800">{summary.onHold}</p></div>
-                </div>
-            </div>
-        )}
-
-        {/* FILTER BAR */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
-          <div className="flex flex-col md:flex-row gap-3 items-end">
-            <div className="flex-1 min-w-[200px]">
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Status</label>
-                <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                >
-                <option value="">All Status</option>
-                <option value="Completed">Completed</option>
-                <option value="In Progress">In Progress</option>
-                <option value="On Hold">On Hold</option>
-                </select>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">Operational Registry</h1>
+                <p className="text-slate-500 text-sm mt-1 max-w-md leading-relaxed font-bold">
+                  Initialize organizational initiatives, manage stakeholder alignments, and monitor target timelines.
+                </p>
+              </div>
             </div>
 
-            <div className="flex-1 min-w-[200px]">
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Team</label>
-                <select
-                value={teamFilter}
-                onChange={(e) => setTeamFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                >
-                <option value="">All Teams</option>
-                {teams.map((t) => (
-                    <option key={t._id} value={t._id}>
-                    {t.team_name}
-                    </option>
-                ))}
-                </select>
-            </div>
-
-            <div className="flex-1 min-w-[200px]">
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Manager</label>
-                <select
-                value={managerFilter}
-                onChange={(e) => setManagerFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                >
-                <option value="">All Managers</option>
-                {managers.map((m) => (
-                    <option key={m._id} value={m._id}>
-                    {m.name}
-                    </option>
-                ))}
-                </select>
-            </div>
-
-            <div className="flex-1 min-w-[150px]">
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">From</label>
-                <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                />
-            </div>
-
-            <div className="flex-1 min-w-[150px]">
-                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">To</label>
-                <input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                />
-            </div>
-
-            <div className="pb-1">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              {(userRole === "admin" || userRole === "manager") && (
                 <button
-                onClick={resetFilters}
-                className="h-11 px-6 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition flex items-center justify-center gap-2"
+                  onClick={() => navigate("/add-project")}
+                  className="px-8 h-12 rounded-2xl bg-slate-900 text-white font-black text-[11px] uppercase tracking-widest hover:bg-blue-600 shadow-2xl shadow-slate-900/10 transition-all flex items-center gap-2 border border-slate-800 active:scale-95 whitespace-nowrap"
                 >
-                <FiFilter size={16} /> Reset
+                  <FiPlus size={16} /> New Initiative
                 </button>
+              )}
             </div>
           </div>
         </div>
+      </div>
 
-        {/* List View - COMPACT HORIZONTAL TABLE */}
-        {loading ? (
-          <div className="flex flex-col justify-center items-center py-32">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
-            <p className="mt-4 text-slate-500 text-sm animate-pulse">Loading projects...</p>
-          </div>
-        ) : error ? (
-          <p className="text-red-500 text-center text-lg">{error}</p>
-        ) : projects.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-slate-100">
-            <FiFolder className="mx-auto h-16 w-16 text-slate-300 mb-4" />
-            <p className="text-slate-500 font-medium">No projects found.</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse whitespace-nowrap">
-                <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-                    <th className="px-4 py-3 w-[25%]">Project Info</th>
-                    <th className="px-4 py-3 w-[20%]">Team</th>
-                    <th className="px-4 py-3 w-[20%]">Manager</th>
-                    <th className="px-4 py-3 w-[15%]">Deadline</th>
-                    <th className="px-4 py-3 w-[10%]">Status</th>
-                    <th className="px-4 py-3 w-[10%] text-right">Actions</th>
+      <main className="flex-1 -mt-10 max-w-[1600px] mx-auto w-full px-4 md:px-6 pb-12 relative z-20">
+        
+        {/* Statistics Bar */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <StatCard label="Live Initiatives"    value={summary.total}       icon={<FiLayers />}      color="blue" />
+          <StatCard label="Deployed Cycles"    value={summary.completed}   icon={<FiCheckCircle />} color="green" />
+          <StatCard label="Live Operations"    value={summary.inProgress}  icon={<FiActivity />}    color="slate" />
+          <StatCard label="Deferred Nodes"     value={summary.onHold}      icon={<FiClock />}       color="red" />
+        </div>
+
+        {/* Filter bar */}
+        <div className="erp-card bg-white/80 backdrop-blur-md p-4 mb-6 border-slate-200/60 shadow-xl shadow-slate-200/20">
+           <div className="flex flex-wrap gap-4 items-center">
+             <div className="flex items-center gap-2 text-slate-400 group">
+               <FiFilter size={14} className="group-hover:text-blue-500 transition-colors" />
+               <span className="text-[10px] font-black uppercase tracking-widest">Filters</span>
+             </div>
+             
+             <div className="relative flex-1 max-w-sm">
+               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm" />
+               <input
+                 value={search}
+                 onChange={(e) => setSearch(e.target.value)}
+                 className="erp-input pl-9 h-11 w-full text-sm bg-white"
+                 placeholder="Find objective..."
+               />
+             </div>
+
+             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} 
+               className="erp-input h-11 text-[10px] font-black uppercase tracking-widest w-40 bg-white">
+               <option value="">Status: All</option>
+               {["Completed", "In Progress", "On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
+             </select>
+
+             <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} 
+               className="erp-input h-11 text-[10px] font-black uppercase tracking-widest w-40 bg-white">
+               <option value="">Unit: All</option>
+               {teams.map((t) => <option key={t._id} value={t._id}>{t.team_name}</option>)}
+             </select>
+
+             <select value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)} 
+               className="erp-input h-11 text-[10px] font-black uppercase tracking-widest w-40 bg-white">
+               <option value="">Steward: All</option>
+               {managers.map((m) => <option key={m._id} value={m._id}>{m.name}</option>)}
+             </select>
+
+             {(search || statusFilter || teamFilter || managerFilter || fromDate || toDate) && (
+               <button onClick={resetFilters} className="px-3 h-11 text-xs font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1.5">
+                 <FiX size={14} /> Reset
+               </button>
+             )}
+           </div>
+        </div>
+
+        {/* Table/Initiative Grid */}
+        <div className="erp-card bg-white/80 backdrop-blur-md overflow-hidden border-slate-200/60 shadow-xl shadow-slate-200/20">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200/60">
+                  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Initiative Identity</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Allocated Unit</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Strategic Steward</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Deadline</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lifecycle Stage</th>
+                  <th className="px-8 py-5 text-right w-20"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="py-32 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-blue-600 animate-spin" />
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Objective Ledger...</p>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {projects.map((proj) => {
-                      const displayStatus = proj.status || "Unknown";
-                      const statusStyle = statusColors[displayStatus] || statusColors.DEFAULT;
-                      return (
-                        <tr key={proj._id} className="hover:bg-blue-50/30 transition duration-200 group">
-                          <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/edit-project/${proj._id}`)}>
-                            <div className="flex flex-col justify-center">
-                                <span className="font-bold text-slate-800 text-xs truncate group-hover:text-blue-600 transition-colors max-w-[220px]">{proj.project_name}</span>
-                                <span className="text-[10px] text-slate-400 font-mono mt-0.5">{proj.project_id || "N/A"}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                              <span className="text-xs text-slate-600 font-medium truncate block max-w-[150px]">{proj.team?.team_name || "N/A"}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px] font-bold">
-                                    {proj.manager?.name?.charAt(0) || '?'}
-                                  </div>
-                                  <span className="text-xs text-slate-700 truncate">{proj.manager?.name || "Unassigned"}</span>
-                              </div>
-                          </td>
-                          <td className="px-4 py-3">
-                              <div className="flex items-center gap-1.5">
-                                  <FiCalendar className="text-slate-400 shrink-0" size={12} />
-                                  <span className="text-xs text-slate-600">{proj.deadline ? new Date(proj.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'}) : "Not Set"}</span>
-                              </div>
-                          </td>
-                          <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border flex items-center gap-1 w-max ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
-                                  <span className={`w-1 h-1 rounded-full ${statusStyle.dot}`}></span>
-                                  {displayStatus}
-                              </span>
-                          </td>
-                          <td className="px-4 py-3 text-right relative dropdown-actions">
-                            <div className="inline-block relative">
-                              <button
-                                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDropdownOpen(dropdownOpen === proj._id ? null : proj._id);
-                                }}
-                              >
-                                <FiMoreVertical className="text-lg" />
-                              </button>
-                              
-                              {/* Dropdown Menu */}
-                              <div
-                                className={`absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-2xl border border-slate-100 z-20 overflow-hidden transition-all duration-200 origin-top-right ${
-                                  dropdownOpen === proj._id
-                                    ? "opacity-100 scale-100 visible"
-                                    : "opacity-0 scale-95 invisible"
-                                }`}
-                              >
-                                {/* Edit */}
-                                <button
-                                  className="block w-full text-left px-4 py-2.5 text-xs font-medium text-slate-700 hover:bg-blue-50 flex items-center gap-2 hover:text-blue-600 transition-colors"
-                                  onClick={() => {
-                                    navigate(`/edit-project/${proj._id}`);
-                                    setDropdownOpen(null);
-                                  }}
-                                >
-                                  <FiEdit size={14}/> Edit Project
-                                </button>
-                                
-                                <div className="border-t border-slate-100"></div>
+                ) : error ? (
+                  <tr>
+                    <td colSpan={6} className="py-20 px-6">
+                       <EmptyState 
+                          type="error" 
+                          title="Registry Access Denied" 
+                          message="Strategic data retrieval failure. The initiative cluster is temporarily unreachable."
+                          onRetry={() => fetchProjects(page)}
+                        />
+                    </td>
+                  </tr>
+                ) : projects.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-20 px-6">
+                       <EmptyState 
+                          type={search ? "search" : "empty"}
+                          title={search ? "No Tactical Matches" : "Initiative Void"}
+                          message={search ? `No initiatives match your tactical search for "${search}".` : "No operational initiatives have been registered in the system ledger."}
+                       />
+                    </td>
+                  </tr>
+                ) : (
+                  projects.map((proj) => {
+                    const status = proj.status || "Unknown";
+                    const sc = statusColors[status] || statusColors.DEFAULT;
+                    return (
+                      <tr key={proj._id} className="hover:bg-slate-50/80 transition-all duration-300 group">
+                        <td className="px-8 py-6">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{proj.project_name}</span>
+                            <span className="text-[9px] text-slate-400 font-mono mt-0.5 uppercase tracking-tighter">UID: {proj.project_id || proj._id.slice(-6)}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-100 bg-white shadow-xs">
+                             {proj.team?.team_name || "N/A"}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6">
+                           <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center text-[10px] font-black shrink-0">
+                               {proj.manager?.name?.charAt(0) || "?"}
+                             </div>
+                             <span className="text-xs font-bold text-slate-700 tracking-tight">{proj.manager?.name || "Unassigned"}</span>
+                           </div>
+                        </td>
+                        <td className="px-8 py-6">
+                           <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                             <FiCalendar size={13} className="text-blue-500/50" />
+                             {proj.deadline ? new Date(proj.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '∞'}
+                           </div>
+                        </td>
+                        <td className="px-8 py-6">
+                           <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border shadow-xs ${sc.bg} ${sc.text} ${sc.border}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${sc.dot} animate-pulse`} />
+                              {status}
+                           </span>
+                        </td>
+                        <td className="px-8 py-6 text-right whitespace-nowrap dropdown-actions">
+                           <div className="relative inline-block">
+                             <button onClick={() => setDropdownOpen(dropdownOpen === proj._id ? null : proj._id)} 
+                               className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-white hover:border-slate-200 border border-transparent rounded-xl transition-all active:scale-90">
+                               <FiMoreVertical size={18} />
+                             </button>
+                             <AnimatePresence>
+                               {dropdownOpen === proj._id && (
+                                 <motion.div 
+                                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                   animate={{ opacity: 1, scale: 1, y: 0 }}
+                                   exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                   className="absolute right-0 mt-3 w-52 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 z-30 overflow-hidden"
+                                 >
+                                    <button onClick={() => navigate(`/edit-project/${proj._id}`)} 
+                                      className="flex items-center gap-3 w-full px-5 py-4 text-[10px] font-black text-slate-700 uppercase tracking-widest hover:bg-slate-50/50 transition-colors">
+                                       <FiEdit size={14} className="text-blue-600" /> Modify Node
+                                    </button>
+                                    {userRole === "admin" && (
+                                       <button onClick={() => confirmDelete(proj._id)} 
+                                         className="flex items-center gap-3 w-full px-5 py-4 text-[10px] font-black text-rose-600 uppercase tracking-widest hover:bg-rose-50/50 transition-colors border-t border-slate-100">
+                                          <FiTrash2 size={14} /> Purge Object
+                                       </button>
+                                    )}
+                                 </motion.div>
+                               )}
+                             </AnimatePresence>
+                           </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
-                                {/* Delete */}
-                                <button
-                                  className="block w-full text-left px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                  onClick={() => confirmDelete(proj._id)}
-                                >
-                                  <FiTrash2 size={14}/> Delete
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            <div className="p-4 border-t border-slate-100 flex justify-center items-center gap-4 bg-slate-50/50">
-              <button 
-                onClick={prevPage} 
-                className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={page === 1}
-              >
+          {/* Pagination */}
+          <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Page Node {page}</span>
+            <div className="flex gap-2">
+              <button onClick={prevPage} disabled={page === 1} 
+                className="px-6 py-2 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all active:scale-95 shadow-sm">
                 Previous
               </button>
-              <div className="text-xs font-bold text-slate-500">Page {page}</div>
-              <button 
-                onClick={nextPage} 
-                className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={projects.length < limit}
-              >
+              <button onClick={nextPage} disabled={projects.length < limit} 
+                className="px-6 py-2 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all active:scale-95 shadow-sm">
                 Next
               </button>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-96 text-center animate-[fadeIn_0.2s_ease-out]">
-            <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
-               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Delete Project?</h2>
-            <p className="text-slate-500 mb-6 text-sm leading-relaxed">This will permanently remove this project and all associated tasks. This action cannot be undone.</p>
-            <div className="flex justify-center gap-3">
-              <button 
-                className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition font-medium text-sm" 
-                onClick={() => setModalOpen(false)}
-              >
-                Cancel
-              </button>
-              <button 
-                className="px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium text-sm shadow-lg shadow-red-200" 
-                onClick={handleDelete}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
         </div>
-      )}
+      </main>
 
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
+      {/* ── Delete Confirmation Modal ── */}
+      <AnimatePresence>
+        {modalOpen && (
+          <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-[2.5rem] shadow-2xl p-10 w-full max-w-md border border-white/20"
+            >
+              <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 mb-6 border border-rose-100">
+                 <FiTrash2 size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-3">Terminate Node?</h3>
+              <p className="text-sm text-slate-500 mb-10 leading-relaxed font-bold">
+                 This action will permanently purge the project node and all associated historical datasets from the system ledger.
+              </p>
+              <div className="flex gap-4">
+                <button onClick={() => setModalOpen(false)} className="flex-1 h-12 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all active:scale-95">Abort</button>
+                <button onClick={handleDelete} className="flex-1 h-12 rounded-xl bg-rose-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all active:scale-95">Execute Purge</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
-      <Toast
-        message={toast.message}
-        type={toast.type}
-        isVisible={toast.show}
-        onClose={() => setToast({ ...toast, show: false })}
-      />
-
+      <Toast message={toast.message} type={toast.type} isVisible={toast.show} onClose={() => setToast({ ...toast, show: false })} />
       <Footer />
     </div>
   );
 };
+
+// ── StatCard Sub-component (Same as Employees.jsx) ──────────────────────────
+function StatCard({ label, value, icon, color }) {
+  const styles = {
+    blue:   "bg-blue-500/10 text-blue-600 border-blue-100",
+    green:  "bg-emerald-500/10 text-emerald-600 border-emerald-100",
+    red:    "bg-rose-500/10 text-rose-600 border-rose-100",
+    slate:  "bg-slate-100 text-slate-500 border-slate-200"
+  };
+
+  return (
+    <div className="erp-card bg-white/80 backdrop-blur-md p-6 group transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/40">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] opacity-60">{label}</p>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg border transition-all duration-300 group-hover:scale-110 ${styles[color]}`}>
+          {icon}
+        </div>
+      </div>
+      <p className="text-3xl font-black tracking-tight text-slate-900">{value}</p>
+    </div>
+  );
+}
 
 export default Projects;
